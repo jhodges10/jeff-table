@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 import { DataGrid, type DataGridProps } from "../src";
 import { people, personColumns, type Person } from "./fixtures";
 
@@ -37,6 +38,20 @@ export const DarkTheme: Story = {
     },
   },
   render: (args) => <div className="story-theme-card"><PersonGrid {...args} /></div>,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const nameHeader = canvas.getByRole("columnheader", { name: /Name/ });
+    const nameCell = canvas.getAllByRole("gridcell", { name: "Ada Lovelace" })[0]!;
+    const balanceHeader = canvas.getByRole("columnheader", { name: /Balance/ });
+    const balanceCell = canvas.getByRole("gridcell", { name: "$1,250.00" });
+
+    await expect(getComputedStyle(nameHeader).paddingInlineStart).toBe(
+      getComputedStyle(nameCell).paddingInlineStart,
+    );
+    await expect(getComputedStyle(balanceHeader).paddingInlineEnd).toBe(
+      getComputedStyle(balanceCell).paddingInlineEnd,
+    );
+  },
 };
 
 export const BrandTheme: Story = {

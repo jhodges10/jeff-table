@@ -27,6 +27,7 @@
   --jt-radius: .625rem;
   --jt-selected: #eff6ff;
   --jt-shadow: 0 1px 2px rgb(15 23 42 / .06);
+  --jt-cell-inline-padding: .75rem;
   position: relative;
   min-width: 0;
   overflow: visible;
@@ -115,7 +116,7 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  padding: .375rem .625rem;
+  padding: .375rem var(--jt-cell-inline-padding);
   color: var(--jt-muted-foreground);
   font-size: .75rem;
   font-weight: 650;
@@ -295,7 +296,7 @@
 .jt-grid__row[data-state="selected"] { background: var(--jt-selected); }
 .jt-grid__row[data-disabled="true"] { opacity: .65; }
 .jt-grid__row:focus-visible { z-index: 2; outline: 2px solid var(--jt-accent); outline-offset: -2px; }
-.jt-grid__cell { height: 100%; overflow: hidden; padding: .5rem .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.jt-grid__cell { height: 100%; overflow: hidden; padding: .5rem var(--jt-cell-inline-padding); text-overflow: ellipsis; white-space: nowrap; }
 .jt-grid__selection-cell { justify-content: center; padding: .5rem; }
 .jt-grid input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--jt-accent); }
 .jt-grid__section {
