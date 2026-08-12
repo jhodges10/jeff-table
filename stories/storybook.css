@@ -1,7 +1,7 @@
 html { background: #f5f7fb; }
 body { margin: 0; color: #0f172a; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 .story-shell { min-width: 0; padding: .5rem; }
-.story-note { margin: 0 0 .75rem; color: #64748b; font-size: .8125rem; }
+.story-note { margin: 0 0 .75rem; color: #475569; font-size: .8125rem; }
 .story-toolbar-button { border: 1px solid #dbe3ef; border-radius: .45rem; padding: .4rem .65rem; color: #334155; background: white; cursor: pointer; }
 .story-toolbar-button:hover { border-color: #8ba5ca; }
 .story-avatar { display: inline-grid; width: 1.75rem; height: 1.75rem; place-items: center; border-radius: 999px; color: #3730a3; background: #e0e7ff; font-size: .65rem; font-weight: 750; }
