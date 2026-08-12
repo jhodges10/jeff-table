@@ -56,6 +56,8 @@ const DENSITY_ROW_HEIGHT = {
   spacious: 52,
 } as const;
 
+const PIXEL_WIDTH_PATTERN = /^(\d+(?:\.\d+)?)px$/;
+
 function numericSort<TData extends RowData>(
   left: DataGridRow<TData>,
   right: DataGridRow<TData>,
@@ -74,9 +76,19 @@ function prepareColumns<TData extends RowData>(
 ): DataGridColumnDef<TData>[] {
   return columns.map((column) => {
     const filterConfig = column.meta?.filter;
+    const pixelWidth = column.meta?.width?.match(PIXEL_WIDTH_PATTERN)?.[1];
+    const pixelSize = pixelWidth === undefined ? undefined : Number(pixelWidth);
+    const inferredMinSize =
+      column.meta?.minWidth ??
+      (column.minSize === undefined && pixelSize !== undefined && pixelSize < 72
+        ? pixelSize
+        : undefined);
     const next: DataGridColumnDef<TData> = {
       ...column,
-      ...(column.meta?.minWidth !== undefined ? { minSize: column.meta.minWidth } : {}),
+      ...(column.size === undefined && pixelSize !== undefined
+        ? { size: pixelSize }
+        : {}),
+      ...(inferredMinSize !== undefined ? { minSize: inferredMinSize } : {}),
       ...(column.meta?.maxWidth !== undefined ? { maxSize: column.meta.maxWidth } : {}),
       ...(column.meta?.numericSort && !column.sortFn ? { sortFn: numericSort<TData> } : {}),
       ...(filterConfig && !column.filterFn
@@ -201,6 +213,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     columns: processedColumns,
     data: tableData,
     defaultColumn: { minSize: 72, maxSize: 1200, size: 160 },
+    columnResizeMode: "onChange",
     enableColumnResizing,
     enableRowSelection: props.enableRowSelection
       ? (row) => props.isRowSelectable?.(row.original) ?? true

@@ -285,6 +285,31 @@ describe("DataGrid", () => {
     expect(transfer.setData).toHaveBeenCalledWith("text/plain", "email");
   });
 
+  it("resizes columns during the drag and keeps header and body tracks aligned", () => {
+    render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnResizing
+        preferenceStorage={null}
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+    const header = screen.getByRole("columnheader", { name: /Name/ });
+    const headerRow = header.parentElement as HTMLElement;
+    const bodyRow = screen.getByText("Ada Lovelace").closest("[role=row]") as HTMLElement;
+    const resizeHandle = screen.getByRole("button", { name: "Resize name column" });
+
+    expect(headerRow.style.gridTemplateColumns).toBe("180px 220px 100px");
+    fireEvent.mouseDown(resizeHandle, { clientX: 180 });
+    fireEvent.mouseMove(document, { clientX: 240 });
+
+    expect(headerRow.style.gridTemplateColumns).toBe("240px 220px 100px");
+    expect(bodyRow.style.gridTemplateColumns).toBe(headerRow.style.gridTemplateColumns);
+    fireEvent.mouseUp(document);
+  });
+
   it("selects all loaded rows and reports an indeterminate state after one is cleared", () => {
     const { container } = render(
       <DataGrid

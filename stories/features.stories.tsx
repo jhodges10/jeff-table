@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, userEvent, within } from "storybook/test";
 import { DataGrid, type DataGridProps } from "../src";
 import { people, personColumns, type Person } from "./fixtures";
 
@@ -70,7 +71,33 @@ export const DragAndDropColumns: Story = {
 export const ResizableColumns: Story = {
   args: {
     enableColumnResizing: true,
-    tableId: "storybook-column-sizing",
+    preferenceStorage: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const header = canvas.getByRole("columnheader", { name: /Name/ });
+    const cell = canvas.getAllByRole("gridcell", { name: "Ada Lovelace" })[0]!;
+    const resizeHandle = canvas.getByRole("button", { name: "Resize name column" });
+    const handleRect = resizeHandle.getBoundingClientRect();
+    const startWidth = header.getBoundingClientRect().width;
+    const startX = handleRect.left + handleRect.width / 2;
+    const y = handleRect.top + handleRect.height / 2;
+
+    await userEvent.pointer([
+      { coords: { clientX: startX, clientY: y }, keys: "[MouseLeft>]", target: resizeHandle },
+      { coords: { clientX: startX + 80, clientY: y }, target: resizeHandle },
+    ]);
+
+    const liveWidth = header.getBoundingClientRect().width;
+    await expect(liveWidth).toBeGreaterThanOrEqual(startWidth + 79);
+    await expect(cell.getBoundingClientRect().width).toBeCloseTo(liveWidth, 0);
+
+    await userEvent.pointer({
+      coords: { clientX: startX + 80, clientY: y },
+      keys: "[/MouseLeft]",
+      target: resizeHandle,
+    });
+    await expect(header.getBoundingClientRect().width).toBeCloseTo(liveWidth, 0);
   },
 };
 
