@@ -3,5 +3,6 @@ dist/
 storybook-static/
 coverage/
 .vercel/
+.env*
 *.log
 .DS_Store
