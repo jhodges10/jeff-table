@@ -1,0 +1,715 @@
+"use client";
+
+import {
+  flexRender,
+  type RowData,
+  useTable,
+} from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import * as React from "react";
+import { ColumnVisibilityMenu } from "./column-visibility-menu";
+import {
+  dataGridFeatures,
+  type DataGridColumn,
+  type DataGridColumnDef,
+  type DataGridRow,
+} from "./features";
+import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
+import { DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
+import { IndeterminateCheckbox } from "./indeterminate-checkbox";
+import { InlineFilter } from "./inline-filter";
+import type {
+  DataGridProps,
+  DataGridRenderContext,
+  DataGridSlot,
+  DataGridTheme,
+} from "./types";
+import { useColumnReordering } from "./use-column-reordering";
+import { useDataGridState } from "./use-data-grid-state";
+import {
+  buildSectionItems,
+  calculateViewportHeight,
+  cx,
+  deterministicSkeletonWidth,
+  getColumnDefinitionId,
+} from "./utils";
+
+const DEFAULT_THEME: DataGridTheme = {
+  accent: "#2563eb",
+  accentForeground: "#ffffff",
+  background: "#ffffff",
+  border: "#e2e8f0",
+  danger: "#dc2626",
+  foreground: "#0f172a",
+  headerBackground: "#f8fafc",
+  hover: "#f8fafc",
+  muted: "#f1f5f9",
+  mutedForeground: "#64748b",
+  radius: "0.625rem",
+  selected: "#eff6ff",
+  shadow: "0 1px 2px rgb(15 23 42 / 0.06)",
+};
+
+const DENSITY_ROW_HEIGHT = {
+  compact: 36,
+  comfortable: 44,
+  spacious: 52,
+} as const;
+
+function numericSort<TData extends RowData>(
+  left: DataGridRow<TData>,
+  right: DataGridRow<TData>,
+  columnId: string,
+): number {
+  const parse = (value: unknown) => {
+    if (typeof value === "number") return value;
+    const numeric = Number.parseFloat(String(value ?? "").replace(/[^0-9.-]+/g, ""));
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+  return parse(left.getValue(columnId)) - parse(right.getValue(columnId));
+}
+
+function prepareColumns<TData extends RowData>(
+  columns: readonly DataGridColumnDef<TData>[],
+): DataGridColumnDef<TData>[] {
+  return columns.map((column) => {
+    const filterConfig = column.meta?.filter;
+    const next: DataGridColumnDef<TData> = {
+      ...column,
+      ...(column.meta?.minWidth !== undefined ? { minSize: column.meta.minWidth } : {}),
+      ...(column.meta?.maxWidth !== undefined ? { maxSize: column.meta.maxWidth } : {}),
+      ...(column.meta?.numericSort && !column.sortFn ? { sortFn: numericSort<TData> } : {}),
+      ...(filterConfig && !column.filterFn
+        ? {
+            filterFn: (row, columnId, value) =>
+              matchesColumnFilter(row.getValue(columnId), value, filterConfig),
+          }
+        : {}),
+    };
+    return next;
+  });
+}
+
+function resolveTrack<TData extends RowData>(
+  column: DataGridColumn<TData>,
+  enableColumnResizing: boolean,
+): string {
+  if (enableColumnResizing) return `${column.getSize()}px`;
+  return column.columnDef.meta?.width ?? `${column.getSize()}px`;
+}
+
+function renderSlot<TData extends RowData>(
+  slot: DataGridSlot<TData> | undefined,
+  context: DataGridRenderContext<TData>,
+): React.ReactNode {
+  return typeof slot === "function" ? slot(context) : slot;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return typeof error === "string" ? error : "Something went wrong while loading these records.";
+}
+
+function createThemeStyle(
+  theme: Partial<DataGridTheme> | undefined,
+  style: React.CSSProperties | undefined,
+): React.CSSProperties {
+  const resolved = { ...DEFAULT_THEME, ...theme };
+  return {
+    ...style,
+    "--jt-accent": resolved.accent,
+    "--jt-accent-foreground": resolved.accentForeground,
+    "--jt-background": resolved.background,
+    "--jt-border": resolved.border,
+    "--jt-danger": resolved.danger,
+    "--jt-foreground": resolved.foreground,
+    "--jt-header-background": resolved.headerBackground,
+    "--jt-hover": resolved.hover,
+    "--jt-muted": resolved.muted,
+    "--jt-muted-foreground": resolved.mutedForeground,
+    "--jt-radius": resolved.radius,
+    "--jt-selected": resolved.selected,
+    "--jt-shadow": resolved.shadow,
+  } as React.CSSProperties;
+}
+
+/**
+ * A virtualized, themeable data grid. `totalCount` is deliberately required:
+ * it sizes the scroll model before every server page has loaded and keeps the
+ * footer honest about the complete result set.
+ */
+export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
+  const {
+    columns,
+    data,
+    totalCount,
+    className,
+    classNames = {},
+    density = "comfortable",
+    enableColumnFiltering = false,
+    enableColumnReordering = false,
+    enableColumnResizing = false,
+    enableColumnVisibility = false,
+    enableGlobalFilter = false,
+    hasMore = data.length < totalCount,
+    height,
+    isLoading = false,
+    isLoadingMore = false,
+    loadMoreThreshold = 8,
+    manualFiltering = false,
+    manualSorting = false,
+    maxVisibleRows = 12,
+    overscan = 10,
+    rowHeight: rowHeightProp,
+    searchPlaceholder = "Search records…",
+    sections,
+    showFooter = true,
+    skeletonRowCount,
+    slots = {},
+    testId = "data-grid",
+    virtualize = true,
+  } = props;
+  const rowHeight = rowHeightProp ?? DENSITY_ROW_HEIGHT[density];
+  const scrollReference = React.useRef<HTMLDivElement>(null);
+  const columnIds = React.useMemo(
+    () => columns.map(getColumnDefinitionId).filter((id): id is string => Boolean(id)),
+    [columns],
+  );
+  const gridState = useDataGridState({
+    columnIds,
+    columnFilters: props.columnFilters,
+    defaultColumnFilters: props.defaultColumnFilters,
+    defaultColumnVisibility: props.defaultColumnVisibility,
+    defaultGlobalFilter: props.defaultGlobalFilter,
+    defaultSorting: props.defaultSorting,
+    globalFilter: props.globalFilter,
+    initialPreferences: props.initialPreferences,
+    onColumnFiltersChange: props.onColumnFiltersChange,
+    onGlobalFilterChange: props.onGlobalFilterChange,
+    onPreferencesChange: props.onPreferencesChange,
+    onSortingChange: props.onSortingChange,
+    preferenceStorage: props.preferenceStorage,
+    rowSelection: props.rowSelection,
+    sorting: props.sorting,
+    tableId: props.tableId,
+  });
+  const processedColumns = React.useMemo(() => prepareColumns(columns), [columns]);
+  const tableData = React.useMemo(() => [...data], [data]);
+
+  const table = useTable({
+    features: dataGridFeatures,
+    columns: processedColumns,
+    data: tableData,
+    defaultColumn: { minSize: 72, maxSize: 1200, size: 160 },
+    enableColumnResizing,
+    enableRowSelection: props.enableRowSelection
+      ? (row) => props.isRowSelectable?.(row.original) ?? true
+      : false,
+    ...(props.getRowId ? { getRowId: props.getRowId } : {}),
+    globalFilterFn: (row, columnId, value) =>
+      matchesGlobalFilter(row.getValue(columnId), String(value ?? "")),
+    manualFiltering,
+    manualSorting,
+    onColumnFiltersChange: gridState.onColumnFiltersChange,
+    onColumnOrderChange: gridState.onColumnOrderChange,
+    onColumnSizingChange: gridState.onColumnSizingChange,
+    onColumnVisibilityChange: gridState.onColumnVisibilityChange,
+    onGlobalFilterChange: gridState.onGlobalFilterChange,
+    onRowSelectionChange: gridState.onRowSelectionChange,
+    onSortingChange: gridState.onSortingChange,
+    state: {
+      columnFilters: gridState.columnFilters,
+      columnOrder: gridState.columnOrder,
+      columnSizing: gridState.columnSizing,
+      columnVisibility: gridState.columnVisibility,
+      globalFilter: gridState.globalFilter,
+      rowSelection: gridState.rowSelection,
+      sorting: gridState.sorting,
+    },
+  });
+
+  const reorder = useColumnReordering(table, enableColumnReordering);
+  const tableRows = table.getRowModel().rows;
+  const displayItems = React.useMemo(
+    () => buildSectionItems(tableRows, sections),
+    [sections, tableRows],
+  );
+  const hasClientFilters =
+    !manualFiltering &&
+    (gridState.columnFilters.length > 0 || String(gridState.globalFilter).trim().length > 0);
+  const effectiveTotalCount = hasClientFilters ? tableRows.length : Math.max(totalCount, data.length);
+  const initialLoading = isLoading && data.length === 0;
+  const initialSkeletonCount =
+    skeletonRowCount ?? Math.max(1, Math.min(effectiveTotalCount || maxVisibleRows, maxVisibleRows));
+  const unloadedCount = Math.max(0, effectiveTotalCount - tableRows.length);
+  const itemCount = initialLoading
+    ? initialSkeletonCount
+    : displayItems.length + (virtualize ? unloadedCount : 0);
+  const sectionHeaderHeight = sections?.headerHeight ?? rowHeight;
+
+  const rowVirtualizer = useVirtualizer({
+    count: itemCount,
+    enabled: virtualize,
+    estimateSize: (index) =>
+      !initialLoading && displayItems[index]?.kind === "section" ? sectionHeaderHeight : rowHeight,
+    getItemKey: (index) => {
+      if (initialLoading) return `initial-skeleton-${index}`;
+      const item = displayItems[index];
+      if (!item) return `unloaded-${index}`;
+      return item.kind === "section" ? `section-${item.key}` : item.row.id;
+    },
+    getScrollElement: () => scrollReference.current,
+    initialRect: { height: 600, width: 1000 },
+    overscan,
+  });
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const renderItems = virtualize
+    ? virtualItems
+    : Array.from({ length: itemCount }, (_, index) => ({
+        end: (index + 1) * rowHeight,
+        index,
+        key: index,
+        lane: 0,
+        size: rowHeight,
+        start: index * rowHeight,
+      }));
+
+  const requestedAtCount = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (
+      !virtualize ||
+      initialLoading ||
+      !hasMore ||
+      isLoadingMore ||
+      !props.onLoadMore ||
+      data.length >= totalCount
+    ) {
+      return;
+    }
+    const lastItem = renderItems.at(-1);
+    if (!lastItem || lastItem.index < Math.max(0, displayItems.length - loadMoreThreshold)) return;
+    if (requestedAtCount.current === data.length) return;
+    requestedAtCount.current = data.length;
+    void props.onLoadMore({ loadedCount: data.length, totalCount });
+  }, [
+    data.length,
+    displayItems.length,
+    hasMore,
+    initialLoading,
+    isLoadingMore,
+    loadMoreThreshold,
+    props.onLoadMore,
+    renderItems,
+    totalCount,
+    virtualize,
+  ]);
+
+  React.useEffect(() => {
+    if (requestedAtCount.current !== null && requestedAtCount.current !== data.length) {
+      requestedAtCount.current = null;
+    }
+  }, [data.length]);
+
+  const selectedRows = React.useMemo(
+    () => table.getSelectedRowModel().flatRows.map((row) => row.original),
+    [data, gridState.rowSelection, table],
+  );
+  const selectionCallback = props.onRowSelectionChange;
+  const selectionMounted = React.useRef(false);
+  React.useEffect(() => {
+    if (!selectionMounted.current) {
+      selectionMounted.current = true;
+      return;
+    }
+    selectionCallback?.(gridState.rowSelection, selectedRows);
+  }, [gridState.rowSelection, selectedRows, selectionCallback]);
+
+  const context: DataGridRenderContext<TData> = {
+    isLoading: isLoading || isLoadingMore,
+    loadedCount: data.length,
+    resetPreferences: gridState.resetPreferences,
+    selectedRows,
+    table,
+    totalCount,
+  };
+  const visibleColumns = table.getVisibleLeafColumns();
+  const gridTemplate = [
+    props.enableRowSelection ? "44px" : null,
+    ...visibleColumns.map((column) => resolveTrack(column, enableColumnResizing)),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const headerGroups = table.getHeaderGroups();
+  const computedHeight =
+    height ??
+    calculateViewportHeight({
+      headerRows: enableColumnFiltering ? 2 : 1,
+      maxVisibleRows,
+      rowHeight,
+      totalCount: initialLoading ? initialSkeletonCount : Math.max(1, effectiveTotalCount),
+    });
+  const themeStyle = React.useMemo(
+    () => createThemeStyle(props.theme, props.style),
+    [props.style, props.theme],
+  );
+  const loadingIndicator =
+    renderSlot(slots.loadingIndicator, context) ?? <SpinnerIcon aria-label="Loading" role="status" />;
+  const showHeaderBand =
+    enableGlobalFilter || slots.headerStart !== undefined || slots.headerEnd !== undefined;
+  const bodyHeight = virtualize ? rowVirtualizer.getTotalSize() : undefined;
+
+  return (
+    <div
+      className={cx("jt-grid", classNames.root, className)}
+      data-density={density}
+      data-loading={(isLoading || isLoadingMore) || undefined}
+      data-testid={testId}
+      style={themeStyle}
+    >
+      {showHeaderBand ? (
+        <div className={cx("jt-grid__header", classNames.header)} data-slot="header">
+          <div className={cx("jt-grid__header-start", classNames.headerStart)}>
+            {enableGlobalFilter ? (
+              <label className="jt-search">
+                <SearchIcon />
+                <span className="jt-sr-only">Search records</span>
+                <input
+                  onChange={(event) => table.setGlobalFilter(event.target.value)}
+                  placeholder={searchPlaceholder}
+                  type="search"
+                  value={String(gridState.globalFilter ?? "")}
+                />
+              </label>
+            ) : null}
+            {renderSlot(slots.headerStart, context)}
+          </div>
+          <div className={cx("jt-grid__header-end", classNames.headerEnd)}>
+            {renderSlot(slots.headerEnd, context)}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="jt-grid__viewport-shell">
+        <div className="jt-grid__column-tools">
+          {renderSlot(slots.columnHeaderEnd, context)}
+          {enableColumnVisibility ? (
+            <ColumnVisibilityMenu
+              {...(classNames.columnMenu ? { className: classNames.columnMenu } : {})}
+              columnOrder={gridState.columnOrder}
+              columnVisibility={gridState.columnVisibility}
+              table={table}
+            />
+          ) : null}
+        </div>
+        <div
+          aria-busy={isLoading || isLoadingMore}
+          aria-colcount={visibleColumns.length + (props.enableRowSelection ? 1 : 0)}
+          aria-label={props["aria-label"] ?? "Data grid"}
+          aria-rowcount={totalCount}
+          className={cx("jt-grid__viewport", classNames.viewport)}
+          data-slot="viewport"
+          ref={scrollReference}
+          role="grid"
+          style={{ height: typeof computedHeight === "number" ? `${computedHeight}px` : computedHeight }}
+          tabIndex={0}
+        >
+        <div className="jt-grid__canvas">
+          <div
+            className={cx("jt-grid__column-headers", classNames.columnHeaders)}
+            data-slot="column-headers"
+          >
+            {headerGroups.map((headerGroup, groupIndex) => (
+              <div
+                className="jt-grid__column-header-row"
+                key={headerGroup.id}
+                role="row"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
+                {props.enableRowSelection ? (
+                  <div className="jt-grid__selection-cell" role="columnheader">
+                    {groupIndex === headerGroups.length - 1 ? (
+                      <IndeterminateCheckbox
+                        aria-label="Select all loaded rows"
+                        checked={table.getIsAllRowsSelected()}
+                        indeterminate={table.getIsSomeRowsSelected()}
+                        onChange={table.getToggleAllRowsSelectedHandler()}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+                {headerGroup.headers.map((header) => {
+                  const sorted = header.column.getIsSorted();
+                  const meta = header.column.columnDef.meta;
+                  const drag = reorder.getDragProps(header);
+                  const isLeaf = header.subHeaders.length === 0;
+                  const sortDirection = sorted === false ? undefined : sorted;
+                  return (
+                    <div
+                      aria-sort={
+                        sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
+                      }
+                      className={cx(
+                        "jt-grid__column-header",
+                        classNames.columnHeader,
+                        meta?.headerClassName,
+                      )}
+                      data-align={meta?.headerAlign ?? "left"}
+                      data-column-header=""
+                      data-drag-source={drag.isDragSource || undefined}
+                      data-drop-side={drag.dropSide}
+                      key={header.id}
+                      onDragOver={drag.onDragOver}
+                      onDrop={drag.onDrop}
+                      role="columnheader"
+                      style={{ gridColumn: header.colSpan > 1 ? `span ${header.colSpan}` : undefined }}
+                    >
+                      <div className="jt-grid__column-title-row">
+                        {isLeaf && drag.draggable ? (
+                          <button
+                            aria-label={`Move ${header.column.id} column`}
+                            className="jt-grid__drag-handle"
+                            draggable
+                            onDragEnd={drag.onDragEnd}
+                            onDragStart={drag.onDragStart}
+                            onKeyDown={(event) => {
+                              if (!event.altKey) return;
+                              if (event.key === "ArrowLeft") reorder.moveBy(header.column.id, -1);
+                              if (event.key === "ArrowRight") reorder.moveBy(header.column.id, 1);
+                            }}
+                            title="Drag to reorder; Alt+Arrow keys also move this column"
+                            type="button"
+                          >
+                            <DragIcon />
+                          </button>
+                        ) : null}
+                        {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                          <button
+                            className="jt-grid__sort-button"
+                            onClick={header.column.getToggleSortingHandler()}
+                            type="button"
+                          >
+                            <span>
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </span>
+                            <SortIcon direction={sortDirection} />
+                          </button>
+                        ) : (
+                          <div className="jt-grid__column-label">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </div>
+                        )}
+                        {meta?.headerTooltip ? (
+                          <span className="jt-grid__header-tooltip" tabIndex={0}>
+                            <span aria-hidden="true">?</span>
+                            <span className="jt-grid__header-tooltip-content" role="tooltip">
+                              {meta.headerTooltip}
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
+                      {enableColumnFiltering && isLeaf && meta?.filter ? (
+                        <div className={cx("jt-grid__filter", classNames.filter)}>
+                          <InlineFilter column={header.column} config={meta.filter} />
+                        </div>
+                      ) : null}
+                      {enableColumnResizing && isLeaf && meta?.resizable !== false ? (
+                        <button
+                          aria-label={`Resize ${header.column.id} column`}
+                          className="jt-grid__resize-handle"
+                          data-resizing={header.column.getIsResizing() || undefined}
+                          onDoubleClick={() => header.column.resetSize()}
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          type="button"
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          <div
+            className={cx("jt-grid__body", classNames.body)}
+            data-slot="body"
+            role="rowgroup"
+            style={{ height: bodyHeight }}
+          >
+            {props.error ? (
+              <div className={cx("jt-grid__state", "jt-grid__error", classNames.error)} role="alert">
+                {renderSlot(slots.error, context) ?? errorMessage(props.error)}
+              </div>
+            ) : !initialLoading && displayItems.length === 0 ? (
+              <div className={cx("jt-grid__state", "jt-grid__empty", classNames.empty)} role="row">
+                {renderSlot(slots.empty, context) ?? props.emptyMessage ?? "No records found."}
+              </div>
+            ) : (
+              renderItems.map((virtualItem) => {
+                const item = initialLoading ? undefined : displayItems[virtualItem.index];
+                const virtualStyle: React.CSSProperties = virtualize
+                  ? {
+                      height: `${virtualItem.size}px`,
+                      position: "absolute",
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }
+                  : { minHeight: `${item?.kind === "section" ? sectionHeaderHeight : rowHeight}px` };
+
+                if (item?.kind === "section") {
+                  return (
+                    <div
+                      className={cx("jt-grid__section", classNames.sectionHeader)}
+                      data-section-key={item.key}
+                      data-slot="section-header"
+                      key={virtualItem.key}
+                      role="row"
+                      style={virtualStyle}
+                    >
+                      <div role="gridcell">
+                        {sections?.renderHeader({ key: item.key, rows: item.rows })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (!item || initialLoading) {
+                  return (
+                    <div
+                      aria-hidden="true"
+                      className={cx("jt-grid__row", "jt-grid__row--skeleton")}
+                      data-index={virtualItem.index}
+                      key={virtualItem.key}
+                      role="row"
+                      style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
+                    >
+                      {props.enableRowSelection ? <div className="jt-grid__selection-cell" /> : null}
+                      {visibleColumns.map((column) => {
+                        const config = column.columnDef.meta?.skeleton;
+                        const skeletonConfig = config === false ? undefined : config;
+                        const shape = config === false ? undefined : skeletonConfig?.shape ?? "bar";
+                        const width = deterministicSkeletonWidth(
+                          virtualItem.index,
+                          column.id,
+                          config === false ? 0 : skeletonConfig?.minWidth,
+                          config === false ? 0 : skeletonConfig?.maxWidth,
+                        );
+                        return (
+                          <div
+                            className={cx("jt-grid__cell", classNames.cell)}
+                            data-align={
+                              column.columnDef.meta?.cellAlign ??
+                              column.columnDef.meta?.headerAlign ??
+                              "left"
+                            }
+                            key={column.id}
+                            role="gridcell"
+                          >
+                            {shape ? (
+                              <span
+                                className={cx("jt-skeleton", classNames.skeleton)}
+                                data-shape={shape}
+                                style={
+                                  shape === "bar"
+                                    ? {
+                                        height: skeletonConfig?.size,
+                                        width: `${width}%`,
+                                      }
+                                    : {
+                                        height: skeletonConfig?.size ?? 28,
+                                        width: skeletonConfig?.size ?? 28,
+                                      }
+                                }
+                              />
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                const row = item.row;
+                const canSelect = props.enableRowSelection ? row.getCanSelect() : true;
+                const rowClass =
+                  typeof props.rowClassName === "function"
+                    ? props.rowClassName(row)
+                    : props.rowClassName;
+                return (
+                    <div
+                      className={cx("jt-grid__row", classNames.row, rowClass)}
+                      aria-rowindex={virtualItem.index + 1}
+                      data-disabled={!canSelect || undefined}
+                      data-index={virtualItem.index}
+                      data-row-id={row.id}
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    key={virtualItem.key}
+                    onClick={() => props.onRowClick?.(row)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && props.onRowClick) props.onRowClick(row);
+                    }}
+                    role="row"
+                    style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
+                    tabIndex={props.onRowClick ? 0 : undefined}
+                  >
+                    {props.enableRowSelection ? (
+                      <div className="jt-grid__selection-cell" role="gridcell">
+                        <input
+                          aria-label={`Select row ${row.id}`}
+                          checked={row.getIsSelected()}
+                          disabled={!canSelect}
+                          onChange={row.getToggleSelectedHandler()}
+                          onClick={(event) => event.stopPropagation()}
+                          type="checkbox"
+                        />
+                      </div>
+                    ) : null}
+                    {row.getVisibleCells().map((cell) => {
+                      const meta = cell.column.columnDef.meta;
+                      const value = cell.getValue();
+                      const content = cell.column.columnDef.cell
+                        ? flexRender(cell.column.columnDef.cell, cell.getContext())
+                        : `${meta?.prefix ?? ""}${value === null || value === undefined ? "" : String(value)}${
+                            meta?.suffix ?? ""
+                          }`;
+                      return (
+                        <div
+                          className={cx("jt-grid__cell", classNames.cell, meta?.cellClassName)}
+                          data-align={meta?.cellAlign ?? meta?.headerAlign ?? "left"}
+                          key={cell.id}
+                          role="gridcell"
+                          title={typeof content === "string" ? content : undefined}
+                        >
+                          {content}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+      </div>
+
+      {showFooter ? (
+        <div className={cx("jt-grid__footer", classNames.footer)} data-slot="footer">
+          <div className={cx("jt-grid__footer-start", classNames.footerStart)}>
+            <span className="jt-grid__record-count">
+              {data.length < totalCount ? `${data.length.toLocaleString()} of ` : ""}
+              {totalCount.toLocaleString()} {totalCount === 1 ? "record" : "records"}
+            </span>
+            {isLoading || isLoadingMore ? loadingIndicator : null}
+            {selectedRows.length > 0 ? (
+              <span className="jt-grid__selection-count">{selectedRows.length} selected</span>
+            ) : null}
+            {renderSlot(slots.footerStart, context)}
+          </div>
+          <div className={cx("jt-grid__footer-end", classNames.footerEnd)}>
+            {renderSlot(slots.footerEnd, context)}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
