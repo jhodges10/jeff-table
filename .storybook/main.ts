@@ -7,6 +7,19 @@ const config: StorybookConfig = {
     name: "@storybook/react-vite",
     options: {},
   },
+  viteFinal: async (viteConfig) => {
+    viteConfig.plugins = viteConfig.plugins?.filter(
+      (plugin) =>
+        !(
+          typeof plugin === "object" &&
+          plugin !== null &&
+          "name" in plugin &&
+          plugin.name === "inject-library-css"
+        ),
+    );
+
+    return viteConfig;
+  },
 };
 
 export default config;
