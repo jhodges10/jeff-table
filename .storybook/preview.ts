@@ -9,11 +9,7 @@ const preview: Preview = {
       createElement(
         "main",
         { "aria-label": `${context.title}: ${context.name}` },
-        createElement(
-          "h1",
-          { className: "jt-sr-only" },
-          `${context.title}: ${context.name}`,
-        ),
+        createElement("h1", { className: "jt-sr-only" }, `${context.title}: ${context.name}`),
         createElement(Story),
       ),
   ],

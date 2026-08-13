@@ -1,8 +1,5 @@
-import "./styles.css";
-
 export { DataGrid } from "./data-grid";
 export {
-  dataGridFeatures,
   type DataGridColumn,
   type DataGridColumnDef,
   type DataGridFeatures,
@@ -10,6 +7,7 @@ export {
   type DataGridInstance,
   type DataGridRow,
   type DataGridTable,
+  dataGridFeatures,
 } from "./features";
 export {
   createLocalStoragePreferenceStorage,
@@ -18,14 +16,14 @@ export {
 export type {
   DataGridAlignment,
   DataGridBaseProps,
-  DataGridClassNames,
   DataGridClassNameSlot,
+  DataGridClassNames,
   DataGridColumnFilterConfig,
   DataGridColumnMeta,
   DataGridDensity,
   DataGridFilterOption,
-  DataGridPreferences,
   DataGridPreferenceStorage,
+  DataGridPreferences,
   DataGridProps,
   DataGridRenderContext,
   DataGridSections,

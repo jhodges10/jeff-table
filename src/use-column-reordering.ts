@@ -46,7 +46,9 @@ export function useColumnReordering<TData extends RowData>(
     (header: DataGridHeader<TData>) => {
       const canReorder = enabled && header.column.columnDef.meta?.reorderable !== false;
       const resolveTarget = (event: React.DragEvent<HTMLElement>) => {
-        const rectangle = event.currentTarget.closest("[data-column-header]")?.getBoundingClientRect();
+        const rectangle = event.currentTarget
+          .closest("[data-column-header]")
+          ?.getBoundingClientRect();
         const leftHalf = rectangle ? event.clientX < rectangle.left + rectangle.width / 2 : true;
         return resolveColumnDropTarget(
           table.getVisibleLeafColumns().map((column) => column.id),

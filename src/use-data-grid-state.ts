@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table";
 import * as React from "react";
 import { defaultPreferenceStorage } from "./preferences";
-import type { DataGridBaseProps, DataGridPreferences, DataGridPreferenceStorage } from "./types";
+import type { DataGridPreferenceStorage, DataGridPreferences } from "./types";
 import { reconcileColumnOrder } from "./utils";
 
 interface DataGridStateOptions {
@@ -33,7 +33,8 @@ interface DataGridStateOptions {
 }
 
 export function useDataGridState(options: DataGridStateOptions) {
-  const storage = options.preferenceStorage === undefined ? defaultPreferenceStorage : options.preferenceStorage;
+  const storage =
+    options.preferenceStorage === undefined ? defaultPreferenceStorage : options.preferenceStorage;
   const [seed] = React.useState(() => {
     const stored = options.tableId && storage ? storage.load(options.tableId) : undefined;
     return {

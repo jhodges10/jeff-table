@@ -1,10 +1,18 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
+const libraryCssPath = resolve(import.meta.dirname, "src/styles.css");
+
 const injectLibraryCss: Plugin = {
   name: "inject-library-css",
   generateBundle(_options, bundle) {
+    this.emitFile({
+      fileName: "styles.css",
+      source: readFileSync(libraryCssPath, "utf8"),
+      type: "asset",
+    });
     for (const output of Object.values(bundle)) {
       if (output.type === "chunk" && output.isEntry) {
         output.code = `import "./styles.css";\n${output.code}`;
@@ -30,8 +38,7 @@ export default defineConfig({
         "@tanstack/react-virtual",
       ],
       output: {
-        assetFileNames: (asset) =>
-          asset.name?.endsWith(".css") ? "styles.css" : "assets/[name][extname]",
+        assetFileNames: "assets/[name][extname]",
       },
     },
   },

@@ -3,8 +3,8 @@ import type { SVGProps } from "react";
 type IconProps = SVGProps<SVGSVGElement>;
 
 const baseProps = {
-  "aria-hidden": true,
   fill: "none",
+  focusable: false,
   height: 16,
   stroke: "currentColor",
   strokeLinecap: "round" as const,
@@ -16,7 +16,7 @@ const baseProps = {
 
 export function ColumnsIcon(props: IconProps) {
   return (
-    <svg {...baseProps} {...props}>
+    <svg {...baseProps} {...props} aria-hidden="true">
       <rect height="16" rx="2" width="18" x="3" y="4" />
       <path d="M9 4v16M15 4v16" />
     </svg>
@@ -25,7 +25,7 @@ export function ColumnsIcon(props: IconProps) {
 
 export function DragIcon(props: IconProps) {
   return (
-    <svg {...baseProps} {...props}>
+    <svg {...baseProps} {...props} aria-hidden="true">
       <circle cx="9" cy="7" fill="currentColor" r="1" stroke="none" />
       <circle cx="15" cy="7" fill="currentColor" r="1" stroke="none" />
       <circle cx="9" cy="12" fill="currentColor" r="1" stroke="none" />
@@ -38,7 +38,7 @@ export function DragIcon(props: IconProps) {
 
 export function SearchIcon(props: IconProps) {
   return (
-    <svg {...baseProps} {...props}>
+    <svg {...baseProps} {...props} aria-hidden="true">
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-4-4" />
     </svg>
@@ -50,7 +50,7 @@ export function SortIcon({
   ...props
 }: IconProps & { direction?: "asc" | "desc" | undefined }) {
   return (
-    <svg {...baseProps} {...props} data-direction={direction ?? "none"}>
+    <svg {...baseProps} {...props} aria-hidden="true" data-direction={direction ?? "none"}>
       {direction === "asc" ? <path d="m8 14 4-4 4 4" /> : null}
       {direction === "desc" ? <path d="m8 10 4 4 4-4" /> : null}
       {direction === undefined ? <path d="m8 9 4-4 4 4M16 15l-4 4-4-4" /> : null}
@@ -58,9 +58,16 @@ export function SortIcon({
   );
 }
 
-export function SpinnerIcon(props: IconProps) {
+export function SpinnerIcon({ className, ...props }: IconProps) {
+  const label = typeof props["aria-label"] === "string" ? props["aria-label"] : "Loading";
   return (
-    <svg {...baseProps} {...props} className={["jt-spinner", props.className].filter(Boolean).join(" ")}>
+    <svg
+      {...baseProps}
+      role="status"
+      {...props}
+      className={["jt-spinner", className].filter(Boolean).join(" ")}
+    >
+      <title>{label}</title>
       <circle cx="12" cy="12" opacity=".25" r="9" />
       <path d="M21 12a9 9 0 0 0-9-9" />
     </svg>

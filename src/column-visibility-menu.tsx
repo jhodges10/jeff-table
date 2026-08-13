@@ -1,6 +1,6 @@
 import type { RowData } from "@tanstack/react-table";
-import { ColumnsIcon } from "./icons";
 import type { DataGridInstance } from "./features";
+import { ColumnsIcon } from "./icons";
 import { cx, reconcileColumnOrder } from "./utils";
 
 interface ColumnVisibilityMenuProps<TData extends RowData> {
@@ -33,23 +33,22 @@ export function ColumnVisibilityMenu<TData extends RowData>({
 
   return (
     <details className={cx("jt-column-menu", className)} data-slot="column-menu">
-      <summary
-        aria-label="Show or hide columns"
-        className="jt-icon-button"
-        role="button"
-        title="Columns"
-      >
+      <summary aria-label="Show or hide columns" className="jt-icon-button" title="Columns">
         <ColumnsIcon />
       </summary>
-      <div className="jt-column-menu__content" role="menu">
-        <p className="jt-column-menu__title">Columns</p>
+      <fieldset className="jt-column-menu__content">
+        <legend className="jt-column-menu__title">Columns</legend>
         {columns.map((column) => {
           const header = column.columnDef.header;
           const label = typeof header === "string" ? header : column.id;
           const locked = !column.getCanHide() || (column.getIsVisible() && visibleCount <= 1);
 
           return (
-            <label className="jt-column-menu__item" data-disabled={locked || undefined} key={column.id}>
+            <label
+              className="jt-column-menu__item"
+              data-disabled={locked || undefined}
+              key={column.id}
+            >
               <span>{label}</span>
               <input
                 checked={columnVisibility[column.id] !== false}
@@ -60,7 +59,7 @@ export function ColumnVisibilityMenu<TData extends RowData>({
             </label>
           );
         })}
-      </div>
+      </fieldset>
     </details>
   );
 }

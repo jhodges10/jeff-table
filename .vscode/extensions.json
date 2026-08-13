@@ -1,0 +1,4 @@
+{
+  "recommendations": ["biomejs.biome", "TypeScriptTeam.native-preview"],
+  "unwantedRecommendations": ["esbenp.prettier-vscode", "dbaeumer.vscode-eslint"]
+}

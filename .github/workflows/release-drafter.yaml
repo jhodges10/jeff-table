@@ -1,0 +1,224 @@
+name: "Release Drafter"
+
+# Two-stage release lifecycle (see docs/dev/release-process.md):
+#
+#   • push to `development` → release-drafter maintains a single running DRAFT
+#     release, accumulating notes from each merged PR. Nothing is published and
+#     no git tag is created — drafts are invisible to the "What's New" changelog.
+#
+#   • push to `staging` (via "Promote to staging") → the accumulated draft is
+#     finalized (date tag locked in, new EF migrations appended) and published
+#     as a PRERELEASE. Publishing creates the git tag that `deploy.yml` resolves
+#     for the staging rollout, and staging's in-app "What's New" (which has
+#     `Changelog__ExcludePrereleases=false`) surfaces it as a preview.
+#
+# Production promotion later flips the prerelease(s) to a full release — that
+# lives in `promote-to-production.yml`, not here.
+
+on:
+  push:
+    branches:
+      - development
+      - staging
+
+# Serialize per branch so rapid merges don't race two runs updating the same
+# draft. Never cancel in-flight — a running staging publish must finish.
+concurrency:
+  group: release-drafter-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    permissions:
+      # write permission is required to create/publish a github release
+      contents: write
+      # write permission is required for autolabeler
+      # otherwise, read permission is required at least
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository to access config files
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Generate date-based version tag. On development this keeps the draft's
+      # tag current; on staging it locks the tag the prerelease publishes under.
+      - name: Generate date-based version
+        id: generate_version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Build today's date in America/New_York so the version matches HBC business day
+            const today = new Date().toLocaleDateString('en-CA', {
+              timeZone: 'America/New_York',
+            }); // YYYY-MM-DD
+
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            // Tags we must NOT collide with: published releases (prereleases and
+            // full releases alike) + real git tags. Drafts are intentionally
+            // excluded — release-drafter resumes the existing draft, so reusing
+            // its tag is correct, not a conflict.
+            const existingTags = new Set(
+              releases.data.filter((r) => !r.draft).map((r) => r.tag_name),
+            );
+
+            try {
+              const tags = await github.rest.repos.listTags({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              });
+              tags.data.forEach((t) => existingTags.add(t.name));
+            } catch (e) {
+              console.log('Could not fetch git tags, continuing with release tags only');
+            }
+
+            const todayPattern = new RegExp(`^${today}-v(\\d+)$`);
+            const todayPublished = releases.data
+              .filter((r) => !r.draft)
+              .map((r) => r.tag_name)
+              .filter((tag) => todayPattern.test(tag))
+              .map((tag) => parseInt(tag.match(todayPattern)[1], 10));
+
+            let nextVersion = todayPublished.length > 0 ? Math.max(...todayPublished) + 1 : 1;
+            let newVersion = `${today}-v${nextVersion}`;
+
+            while (existingTags.has(newVersion)) {
+              console.log(`Tag ${newVersion} already exists, incrementing...`);
+              nextVersion++;
+              newVersion = `${today}-v${nextVersion}`;
+            }
+
+            console.log(`Generated version: ${newVersion}`);
+            core.setOutput('version', newVersion);
+
+      # Find the most recently published release so we can diff migrations
+      # against it. Staging-only — the draft phase doesn't touch migrations.
+      - name: Find previous published release tag
+        id: prev_tag
+        if: github.ref_name == 'staging'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 20,
+            });
+            const published = releases.data.find(r => !r.draft);
+            const tag = published?.tag_name ?? '';
+            console.log(`Previous published tag: ${tag || '(none — first release)'}`);
+            core.setOutput('tag', tag);
+
+      # Detect EF Core migration files added since the previous release
+      - name: Detect new EF migrations
+        id: migrations
+        if: github.ref_name == 'staging'
+        run: |
+          PREV='${{ steps.prev_tag.outputs.tag }}'
+          MIG_DIR='apps/api/src/Hops.Infrastructure/Migrations'
+
+          if [ -z "$PREV" ]; then
+            echo "No previous release — skipping migration diff"
+            echo 'body=' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git rev-parse --verify "refs/tags/$PREV" >/dev/null 2>&1; then
+            echo "Previous tag '$PREV' not found locally; fetching"
+            git fetch --depth=1 origin "refs/tags/$PREV:refs/tags/$PREV" || {
+              echo "::warning::Could not fetch previous tag '$PREV' — skipping migration diff"
+              echo 'body=' >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+          fi
+
+          # New migrations = added .cs files matching <timestamp>_<Name>.cs, excluding .Designer.cs and ModelSnapshot
+          NEW=$(git diff --name-only --diff-filter=A "$PREV"..HEAD -- "$MIG_DIR" \
+            | grep -E "/[0-9]+_[^/]+\.cs$" \
+            | grep -v '\.Designer\.cs$' \
+            | grep -v 'ModelSnapshot\.cs$' \
+            | sed -E "s|.*/([0-9]+)_(.+)\.cs|- \`\2\` (\1)|" || true)
+
+          if [ -z "$NEW" ]; then
+            echo "No new migrations since $PREV"
+            echo 'body=' >> "$GITHUB_OUTPUT"
+          else
+            echo "New migrations since $PREV:"
+            echo "$NEW"
+            {
+              echo 'body<<MIGRATIONS_EOF'
+              echo ''
+              echo '## 🗄️ Database changes'
+              echo ''
+              echo 'The following EF Core migrations are new in this release and will be applied by the API migrate-job before rollout:'
+              echo ''
+              echo "$NEW"
+              echo 'MIGRATIONS_EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      # Draft / refresh the single running release. On `development` this leaves
+      # a draft that keeps accumulating; on `staging` it resumes that same draft
+      # so the publish step below can finalize it. `commitish` pins the (eventual)
+      # tag to the SHA that triggered this run — on staging that's the staging tip.
+      #
+      # `include-pre-releases: true` is load-bearing: release-drafter scans commits
+      # from the last *published* release up to `commitish`, and it ignores
+      # prereleases when picking that baseline unless told otherwise. Since every
+      # nightly staging cut publishes a PRERELEASE, the default would baseline off
+      # the last full release (i.e. the last production promotion) and re-list every
+      # PR since then in each night's notes, growing without bound. With this on,
+      # each prerelease is scoped to "what's new since last night".
+      - name: Draft release
+        id: drafter
+        uses: release-drafter/release-drafter@v6
+        with:
+          config-name: release-drafter-config.yaml
+          tag: ${{ steps.generate_version.outputs.version }}
+          name: ${{ steps.generate_version.outputs.version }} 🌈
+          commitish: ${{ github.sha }}
+          include-pre-releases: true
+          publish: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Staging-only: append the DB migrations section (if any) and publish the
+      # release as a PRERELEASE. Full-release promotion happens at prod time.
+      - name: Append migrations & publish prerelease
+        if: github.ref_name == 'staging'
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.drafter.outputs.id }}
+          DRAFTED_BODY: ${{ steps.drafter.outputs.body }}
+          MIGRATIONS_BODY: ${{ steps.migrations.outputs.body }}
+        with:
+          script: |
+            const body = (process.env.DRAFTED_BODY || '') + (process.env.MIGRATIONS_BODY || '');
+            const releaseId = Number(process.env.RELEASE_ID);
+            if (!releaseId) {
+              core.setFailed('release-drafter did not return a release id');
+              return;
+            }
+            const { data } = await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              body,
+              draft: false,
+              prerelease: true,
+              // A prerelease is never "Latest" — production promotion sets that
+              // when it flips the prerelease to a full release.
+              make_latest: 'false',
+            });
+            console.log(`Published prerelease ${data.tag_name}: ${data.html_url}`);

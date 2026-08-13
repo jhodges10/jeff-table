@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor, within } from "storybook/test";
+import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
 import { DataGrid, type DataGridProps } from "../src";
-import { people, personColumns, type Person } from "./fixtures";
+import { defined } from "../src/test/defined";
+import { type Person, people, personColumns } from "./fixtures";
 
 function PersonGrid(props: DataGridProps<Person>) {
   return <DataGrid {...props} />;
@@ -34,6 +35,33 @@ export const Sections: Story = {
       ),
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const viewport = canvas.getByRole("region", { name: "Data grid rows" });
+    const engineeringCount = people.filter((person) => person.department === "Engineering").length;
+    const engineering = canvas
+      .getByText("Engineering")
+      .closest<HTMLElement>('[data-slot="section-header"]');
+    await expect(engineering).toHaveAttribute("data-sticky", "true");
+
+    viewport.scrollTop = (engineeringCount + 1) * 44 + 1;
+    fireEvent.scroll(viewport);
+    await waitFor(() => {
+      const finance = canvas
+        .getByText("Finance")
+        .closest<HTMLElement>('[data-slot="section-header"]');
+      expect(finance).toHaveAttribute("data-sticky", "true");
+    });
+
+    viewport.scrollTop = 0;
+    fireEvent.scroll(viewport);
+    await waitFor(() => {
+      const restoredEngineering = canvas
+        .getByText("Engineering")
+        .closest<HTMLElement>('[data-slot="section-header"]');
+      expect(restoredEngineering).toHaveAttribute("data-sticky", "true");
+    });
+  },
 };
 
 export const InlineFilters: Story = {
@@ -58,10 +86,8 @@ export const InlineFilters: Story = {
     await userEvent.click(filtersMenu);
     const menu = filtersMenu.closest("details");
     await expect(menu).not.toBeNull();
-    await expect(within(menu as HTMLElement).getByText("1 active")).toBeVisible();
-    await userEvent.click(
-      within(menu as HTMLElement).getByRole("button", { name: "Clear all filters" }),
-    );
+    await expect(within(defined(menu)).getByText("1 active")).toBeVisible();
+    await userEvent.click(within(defined(menu)).getByRole("button", { name: "Clear all filters" }));
     await expect(canvas.getAllByText("Grace Hamilton").length).toBeGreaterThan(0);
     await userEvent.click(filtersMenu);
   },
@@ -86,7 +112,11 @@ export const DragAndDropColumns: Story = {
   args: {
     enableColumnReordering: true,
     slots: {
-      headerStart: <span className="story-note">Drag the six-dot handles, or focus one and press Alt+←/→.</span>,
+      headerStart: (
+        <span className="story-note">
+          Drag the six-dot handles, or focus one and press Alt+←/→.
+        </span>
+      ),
     },
     tableId: "storybook-column-order",
   },
@@ -100,7 +130,7 @@ export const ResizableColumns: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const header = canvas.getByRole("columnheader", { name: /Name/ });
-    const cell = canvas.getAllByRole("gridcell", { name: "Ada Lovelace" })[0]!;
+    const cell = defined(canvas.getAllByRole("gridcell", { name: "Ada Lovelace" })[0]);
     const resizeHandle = canvas.getByRole("button", { name: "Resize name column" });
     const handleRect = resizeHandle.getBoundingClientRect();
     const startWidth = header.getBoundingClientRect().width;
@@ -110,18 +140,22 @@ export const ResizableColumns: Story = {
     await userEvent.pointer([
       { coords: { clientX: startX, clientY: y }, keys: "[MouseLeft>]", target: resizeHandle },
       { coords: { clientX: startX + 80, clientY: y }, target: resizeHandle },
+      {
+        coords: { clientX: startX + 80, clientY: y },
+        keys: "[/MouseLeft]",
+        target: resizeHandle,
+      },
     ]);
 
-    const liveWidth = header.getBoundingClientRect().width;
-    await expect(liveWidth).toBeGreaterThanOrEqual(startWidth + 79);
-    await expect(cell.getBoundingClientRect().width).toBeCloseTo(liveWidth, 0);
+    const resizedWidth = header.getBoundingClientRect().width;
+    await expect(resizedWidth).toBeGreaterThanOrEqual(startWidth + 79);
+    await expect(cell.getBoundingClientRect().width).toBeCloseTo(resizedWidth, 0);
+    await expect(resizeHandle).not.toHaveAttribute("data-resizing");
 
-    await userEvent.pointer({
-      coords: { clientX: startX + 80, clientY: y },
-      keys: "[/MouseLeft]",
-      target: resizeHandle,
-    });
-    await expect(header.getBoundingClientRect().width).toBeCloseTo(liveWidth, 0);
+    await userEvent.dblClick(resizeHandle);
+    await expect(header.getBoundingClientRect().width).toBeCloseTo(startWidth, 0);
+    await expect(cell.getBoundingClientRect().width).toBeCloseTo(startWidth, 0);
+    await expect(resizeHandle).not.toHaveAttribute("data-resizing");
   },
 };
 
@@ -142,7 +176,11 @@ export const StableSelectionAndRangeSelection: Story = {
     isRowSelectable: (row) => row.status !== "Paused",
     slots: {
       footerEnd: ({ selectedRows }) => (
-        <span>{selectedRows.length > 0 ? selectedRows.map((row) => row.name).join(", ") : "No selection"}</span>
+        <span>
+          {selectedRows.length > 0
+            ? selectedRows.map((row) => row.name).join(", ")
+            : "No selection"}
+        </span>
       ),
     },
   },
@@ -171,11 +209,23 @@ export const SeparateHeaderAndFooterSlots: Story = {
     },
     enableGlobalFilter: true,
     slots: {
-      headerStart: <button className="story-toolbar-button" type="button">Saved view</button>,
-      headerEnd: <button className="story-toolbar-button" type="button">Add person</button>,
+      headerStart: (
+        <button className="story-toolbar-button" type="button">
+          Saved view
+        </button>
+      ),
+      headerEnd: (
+        <button className="story-toolbar-button" type="button">
+          Add person
+        </button>
+      ),
       columnHeaderEnd: <span className="story-note">Live</span>,
       footerStart: <span>Synced moments ago</span>,
-      footerEnd: <button className="story-toolbar-button" type="button">Next page</button>,
+      footerEnd: (
+        <button className="story-toolbar-button" type="button">
+          Next page
+        </button>
+      ),
     },
   },
 };

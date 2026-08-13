@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DataGrid, type DataGridProps } from "../src";
-import { people, personColumns, type Person } from "./fixtures";
+import { type Person, people, personColumns } from "./fixtures";
 
 function PersonGrid(props: DataGridProps<Person>) {
   return <DataGrid {...props} />;
@@ -50,7 +50,11 @@ export const CustomLoadingIndicator: Story = {
   args: {
     isLoadingMore: true,
     slots: {
-      loadingIndicator: <span aria-label="Loading" role="status">Fetching…</span>,
+      loadingIndicator: (
+        <span aria-label="Loading" role="status">
+          Fetching…
+        </span>
+      ),
     },
     totalCount: 300,
   },
@@ -72,7 +76,9 @@ export const CustomEmptySlot: Story = {
         <div>
           <strong>Nothing to show</strong>
           <p>Try resetting the saved columns and filters.</p>
-          <button className="story-toolbar-button" onClick={resetPreferences} type="button">Reset view</button>
+          <button className="story-toolbar-button" onClick={resetPreferences} type="button">
+            Reset view
+          </button>
         </div>
       ),
     },

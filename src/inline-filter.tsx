@@ -29,6 +29,7 @@ function FilterIcon() {
     </svg>
   );
 }
+
 function SearchIcon() {
   return (
     <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15">
@@ -88,7 +89,7 @@ function getActiveCount(value: FilterValue, config: DataGridColumnFilterConfig):
 function FilterClearButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button className="jt-filter-editor__clear" onClick={onClick} type="button">
-      <span aria-hidden="true">Ã—</span>
+      <span aria-hidden="true">×</span>
       {label}
     </button>
   );
@@ -136,7 +137,7 @@ function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEdi
           <span className="jt-sr-only">Search filter options</span>
           <input
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search optionsâ€¦"
+            placeholder="Search options…"
             type="search"
             value={search}
           />
@@ -224,7 +225,7 @@ function TextFilterEditor({ config, onChange, value }: ColumnFilterEditorProps) 
         <span className="jt-sr-only">Filter value</span>
         <input
           onChange={(event) => update(event.target.value)}
-          placeholder={config.placeholder ?? "Filterâ€¦"}
+          placeholder={config.placeholder ?? "Filter…"}
           ref={inputReference}
           type="search"
           value={localValue}
@@ -241,7 +242,7 @@ function TextFilterEditor({ config, onChange, value }: ColumnFilterEditorProps) 
           }}
           type="button"
         >
-          Ã—
+          ×
         </button>
       ) : null}
     </div>

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DataGrid } from "./data-grid";
 import type { DataGridColumnDef } from "./features";
+import { defined } from "./test/defined";
 
 interface TestPerson {
   id: string;
@@ -42,7 +43,14 @@ interface FilterRecord {
 }
 
 const filterRows: FilterRecord[] = [
-  { active: true, amount: 75, date: "2026-06-01", id: "a", status: "Active", tags: ["Red", "Blue"] },
+  {
+    active: true,
+    amount: 75,
+    date: "2026-06-01",
+    id: "a",
+    status: "Active",
+    tags: ["Red", "Blue"],
+  },
   { active: false, amount: 25, date: "2025-06-01", id: "b", status: "Paused", tags: ["Green"] },
 ];
 
@@ -84,10 +92,25 @@ const filterColumns: DataGridColumnDef<FilterRecord>[] = [
 
 describe("DataGrid", () => {
   it("renders typed data, headers, and the required total count", () => {
-    render(<DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />);
-    expect(screen.getByRole("columnheader", { name: /Name/ })).toBeVisible();
+    const { container } = render(
+      <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
+    );
+    const grid = screen.getByRole("grid", { name: "Data grid" });
+    const rowsViewport = screen.getByRole("region", { name: "Data grid rows" });
+    const header = screen.getByRole("columnheader", { name: /Name/ });
+    const headerViewport = container.querySelector('[data-slot="column-header-viewport"]');
+    const headerCanvas = container.querySelector<HTMLElement>(".jt-grid__header-canvas");
+
+    expect(header).toBeVisible();
     expect(screen.getByText("Ada Lovelace")).toBeVisible();
     expect(screen.getByText("3 records")).toBeVisible();
+    expect(grid).toContainElement(headerViewport as HTMLElement);
+    expect(grid).toContainElement(rowsViewport);
+    expect(rowsViewport).toContainElement(screen.getByText("Ada Lovelace"));
+    expect(rowsViewport).not.toContainElement(header);
+
+    fireEvent.scroll(rowsViewport, { target: { scrollLeft: 90 } });
+    expect(headerCanvas?.style.transform).toBe("translate3d(-90px, 0, 0)");
   });
 
   it("renders section headers without changing the flat column contract", () => {
@@ -107,23 +130,85 @@ describe("DataGrid", () => {
     expect(screen.getByText("B: 1")).toBeVisible();
   });
 
+  it("keeps the active section sticky while virtualized and hands off to the next group", async () => {
+    const offsetHeight = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockReturnValue(240);
+    const groupedRows: TestPerson[] = Array.from({ length: 40 }, (_, index) => ({
+      email: `person-${index}@example.com`,
+      id: String(index),
+      name: `Person ${index}`,
+      team: index < 20 ? "A" : "B",
+    }));
+    try {
+      render(
+        <DataGrid
+          columns={columns}
+          data={groupedRows}
+          height={240}
+          overscan={0}
+          rowHeight={40}
+          sections={{
+            getKey: (row) => row.team,
+            headerHeight: 40,
+            renderHeader: ({ key }) => `Group ${key}`,
+          }}
+          totalCount={groupedRows.length}
+        />,
+      );
+      const viewport = screen.getByRole("region", { name: "Data grid rows" });
+      const groupA = (await screen.findByText("Group A")).closest('[data-slot="section-header"]');
+      expect(groupA).toHaveAttribute("data-sticky", "true");
+
+      Object.defineProperty(viewport, "scrollTop", { configurable: true, value: 850 });
+      fireEvent.scroll(viewport);
+
+      await waitFor(() => {
+        const groupB = screen.getByText("Group B").closest('[data-slot="section-header"]');
+        expect(groupB).toHaveAttribute("data-sticky", "true");
+        expect(screen.queryByText("Group A")).not.toBeInTheDocument();
+      });
+    } finally {
+      offsetHeight.mockRestore();
+    }
+  });
+
   it("shows deterministic skeleton rows for an initial load", () => {
     const { container, rerender } = render(
-      <DataGrid columns={columns} data={[]} isLoading skeletonRowCount={4} totalCount={100} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={[]}
+        isLoading
+        skeletonRowCount={4}
+        totalCount={100}
+        virtualize={false}
+      />,
     );
     const firstWidths = [...container.querySelectorAll<HTMLElement>(".jt-skeleton")].map(
       (element) => element.style.width,
     );
     expect(firstWidths).toHaveLength(12);
     rerender(
-      <DataGrid columns={columns} data={[]} isLoading skeletonRowCount={4} totalCount={100} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={[]}
+        isLoading
+        skeletonRowCount={4}
+        totalCount={100}
+        virtualize={false}
+      />,
     );
-    expect([...container.querySelectorAll<HTMLElement>(".jt-skeleton")].map((element) => element.style.width))
-      .toEqual(firstWidths);
+    expect(
+      [...container.querySelectorAll<HTMLElement>(".jt-skeleton")].map(
+        (element) => element.style.width,
+      ),
+    ).toEqual(firstWidths);
   });
 
   it("puts the loading indicator immediately beside the record count", () => {
-    render(<DataGrid columns={columns} data={rows} isLoadingMore totalCount={100} virtualize={false} />);
+    render(
+      <DataGrid columns={columns} data={rows} isLoadingMore totalCount={100} virtualize={false} />,
+    );
     const count = screen.getByText(/3 of 100 records/);
     expect(count.nextElementSibling).toHaveAttribute("role", "status");
   });
@@ -131,7 +216,13 @@ describe("DataGrid", () => {
   it("client-filters from the global search", async () => {
     const user = userEvent.setup();
     render(
-      <DataGrid columns={columns} data={rows} enableGlobalFilter totalCount={3} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableGlobalFilter
+        totalCount={3}
+        virtualize={false}
+      />,
     );
     await user.type(screen.getByRole("searchbox", { name: "Search records" }), "Grace");
     expect(screen.getByText("Grace Hopper")).toBeVisible();
@@ -141,7 +232,13 @@ describe("DataGrid", () => {
   it("shares filter state between the Compflow-style header popover and toolbar menu", async () => {
     const user = userEvent.setup();
     render(
-      <DataGrid columns={columns} data={rows} enableColumnFiltering totalCount={3} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnFiltering
+        totalCount={3}
+        virtualize={false}
+      />,
     );
     const nameTrigger = screen.getByLabelText("Filter name");
     expect(screen.queryByRole("searchbox", { name: "Filter value" })).not.toBeInTheDocument();
@@ -159,7 +256,9 @@ describe("DataGrid", () => {
     const menu = menuTrigger.closest("details");
     expect(menu).not.toBeNull();
     expect(within(menu as HTMLElement).getByText("1 active")).toBeVisible();
-    await user.click(within(menu as HTMLElement).getByRole("button", { name: "Clear all filters" }));
+    await user.click(
+      within(menu as HTMLElement).getByRole("button", { name: "Clear all filters" }),
+    );
     expect(screen.getByText("Grace Hopper")).toBeVisible();
   });
 
@@ -208,7 +307,9 @@ describe("DataGrid", () => {
     const amountSummary = screen.getByLabelText("Filter amount");
     await user.click(amountSummary);
     const amountDetails = amountSummary.closest("details");
-    const minimum = within(amountDetails as HTMLElement).getByRole("spinbutton", { name: "Minimum" });
+    const minimum = within(amountDetails as HTMLElement).getByRole("spinbutton", {
+      name: "Minimum",
+    });
     await user.type(minimum, "50");
     expect(screen.getByText("75")).toBeVisible();
 
@@ -223,9 +324,17 @@ describe("DataGrid", () => {
 
   it("sorts client-side through an accessible header button", async () => {
     const user = userEvent.setup();
-    render(<DataGrid columns={columns} data={[rows[1]!, rows[0]!]} totalCount={2} virtualize={false} />);
+    render(
+      <DataGrid
+        columns={columns}
+        data={[defined(rows[1]), defined(rows[0])]}
+        totalCount={2}
+        virtualize={false}
+      />,
+    );
     await user.click(screen.getByRole("button", { name: /Name/ }));
-    const renderedNames = screen.getAllByRole("gridcell")
+    const renderedNames = screen
+      .getAllByRole("gridcell")
       .map((cell) => cell.textContent)
       .filter((value) => value?.includes("Lovelace") || value?.includes("Hopper"));
     expect(renderedNames).toEqual(["Ada Lovelace", "Grace Hopper"]);
@@ -234,7 +343,13 @@ describe("DataGrid", () => {
   it("shows and hides columns from the pinned far-right menu", async () => {
     const user = userEvent.setup();
     render(
-      <DataGrid columns={columns} data={rows} enableColumnVisibility totalCount={3} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnVisibility
+        totalCount={3}
+        virtualize={false}
+      />,
     );
     await user.click(screen.getByLabelText("Show or hide columns"));
     await user.click(screen.getByLabelText("Email"));
@@ -256,13 +371,10 @@ describe("DataGrid", () => {
       />,
     );
     const checkboxes = screen.getAllByRole("checkbox", { name: /Select row/ });
-    fireEvent.click(checkboxes[0]!);
-    fireEvent.click(checkboxes[2]!, { shiftKey: true });
+    fireEvent.click(defined(checkboxes[0]));
+    fireEvent.click(defined(checkboxes[2]), { shiftKey: true });
     expect(checkboxes.every((checkbox) => (checkbox as HTMLInputElement).checked)).toBe(true);
-    expect(onSelectionChange).toHaveBeenLastCalledWith(
-      { "1": true, "2": true, "3": true },
-      rows,
-    );
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ "1": true, "2": true, "3": true }, rows);
   });
 
   it("disables selection through a row predicate", () => {
@@ -282,7 +394,13 @@ describe("DataGrid", () => {
 
   it("moves columns with the keyboard-accessible drag handle", () => {
     render(
-      <DataGrid columns={columns} data={rows} enableColumnReordering totalCount={3} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnReordering
+        totalCount={3}
+        virtualize={false}
+      />,
     );
     fireEvent.keyDown(screen.getByRole("button", { name: "Move name column" }), {
       altKey: true,
@@ -294,7 +412,13 @@ describe("DataGrid", () => {
 
   it("moves columns through native pointer drag-and-drop", () => {
     render(
-      <DataGrid columns={columns} data={rows} enableColumnReordering totalCount={3} virtualize={false} />,
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnReordering
+        totalCount={3}
+        virtualize={false}
+      />,
     );
     const transfer = {
       dropEffect: "none",
@@ -327,14 +451,24 @@ describe("DataGrid", () => {
     const headerRow = header.parentElement as HTMLElement;
     const bodyRow = screen.getByText("Ada Lovelace").closest("[role=row]") as HTMLElement;
     const resizeHandle = screen.getByRole("button", { name: "Resize name column" });
+    const resizeIndicator = resizeHandle.querySelector(".jt-grid__resize-indicator");
 
     expect(headerRow.style.gridTemplateColumns).toBe("180px 220px 100px");
+    expect(resizeHandle).not.toHaveAttribute("data-resizing");
+    expect(resizeHandle).toHaveAttribute("draggable", "false");
+    expect(resizeIndicator).toHaveAttribute("aria-hidden", "true");
     fireEvent.mouseDown(resizeHandle, { clientX: 180 });
+    expect(resizeHandle).toHaveAttribute("data-resizing", "true");
     fireEvent.mouseMove(document, { clientX: 240 });
 
     expect(headerRow.style.gridTemplateColumns).toBe("240px 220px 100px");
     expect(bodyRow.style.gridTemplateColumns).toBe(headerRow.style.gridTemplateColumns);
-    fireEvent.mouseUp(document);
+    fireEvent.mouseUp(document, { clientX: 240 });
+    expect(resizeHandle).not.toHaveAttribute("data-resizing");
+    expect(headerRow.style.gridTemplateColumns).toBe("240px 220px 100px");
+
+    fireEvent.mouseMove(document, { clientX: 300 });
+    expect(headerRow.style.gridTemplateColumns).toBe("240px 220px 100px");
   });
 
   it("selects all loaded rows and reports an indeterminate state after one is cleared", () => {
@@ -350,8 +484,11 @@ describe("DataGrid", () => {
     );
     const selectAll = screen.getByRole("checkbox", { name: "Select all loaded rows" });
     fireEvent.click(selectAll);
-    expect(screen.getAllByRole("checkbox", { name: /Select row/ }).every((item) => (item as HTMLInputElement).checked))
-      .toBe(true);
+    expect(
+      screen
+        .getAllByRole("checkbox", { name: /Select row/ })
+        .every((item) => (item as HTMLInputElement).checked),
+    ).toBe(true);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select row 2" }));
     expect((selectAll as HTMLInputElement).indeterminate).toBe(true);
     expect(container.querySelector(".jt-grid__selection-count")).toHaveTextContent("2 selected");

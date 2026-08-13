@@ -40,4 +40,3 @@ describe("IndeterminateCheckbox", () => {
     expect(input.closest(".jt-check")).toHaveAttribute("data-disabled", "true");
   });
 });
-

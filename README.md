@@ -259,7 +259,10 @@ No Tailwind runtime is required by this package. The defaults live in the standa
 
 ## Development
 
+The package is type-checked with TypeScript 7 (the native Go compiler) and formatted/linted with Biome. Install the workspace-recommended **Biome** and **TypeScript 7** extensions so format-on-save and editor diagnostics match CI.
+
 ```sh
+bun run check
 bun run typecheck
 bun run test
 bun run test:coverage

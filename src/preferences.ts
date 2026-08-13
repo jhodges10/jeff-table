@@ -1,4 +1,4 @@
-import type { DataGridPreferences, DataGridPreferenceStorage } from "./types";
+import type { DataGridPreferenceStorage, DataGridPreferences } from "./types";
 
 const STORAGE_PREFIX = "jeff-table:v1:";
 
@@ -6,7 +6,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function parseDataGridPreferences(value: string | null | undefined): DataGridPreferences | undefined {
+export function parseDataGridPreferences(
+  value: string | null | undefined,
+): DataGridPreferences | undefined {
   if (!value) return undefined;
 
   try {
@@ -19,7 +21,9 @@ export function parseDataGridPreferences(value: string | null | undefined): Data
     }
     if (
       !isRecord(columnSizing) ||
-      !Object.values(columnSizing).every((size) => typeof size === "number" && Number.isFinite(size))
+      !Object.values(columnSizing).every(
+        (size) => typeof size === "number" && Number.isFinite(size),
+      )
     ) {
       return undefined;
     }

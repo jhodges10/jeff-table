@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 import { DataGrid, type DataGridProps } from "../src";
-import { people, personColumns, type Person } from "./fixtures";
+import { defined } from "../src/test/defined";
+import { type Person, people, personColumns } from "./fixtures";
 
 function PersonGrid(props: DataGridProps<Person>) {
   return <DataGrid {...props} />;
@@ -37,11 +38,15 @@ export const DarkTheme: Story = {
       shadow: "0 16px 40px rgb(0 0 0 / .25)",
     },
   },
-  render: (args) => <div className="story-theme-card"><PersonGrid {...args} /></div>,
+  render: (args) => (
+    <div className="story-theme-card">
+      <PersonGrid {...args} />
+    </div>
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const nameHeader = canvas.getByRole("columnheader", { name: /Name/ });
-    const nameCell = canvas.getAllByRole("gridcell", { name: "Ada Lovelace" })[0]!;
+    const nameCell = defined(canvas.getAllByRole("gridcell", { name: "Ada Lovelace" })[0]);
     const balanceHeader = canvas.getByRole("columnheader", { name: /Balance/ });
     const balanceCell = canvas.getByRole("gridcell", { name: "$1,250.00" });
 
@@ -95,7 +100,13 @@ export const DensityVariants: Story = {
       {(["compact", "comfortable", "spacious"] as const).map((density) => (
         <section key={density}>
           <h3>{density}</h3>
-          <PersonGrid {...args} data={people.slice(0, 4)} density={density} totalCount={4} virtualize={false} />
+          <PersonGrid
+            {...args}
+            data={people.slice(0, 4)}
+            density={density}
+            totalCount={4}
+            virtualize={false}
+          />
         </section>
       ))}
     </div>

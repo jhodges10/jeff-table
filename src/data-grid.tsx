@@ -1,29 +1,20 @@
 "use client";
 
-import {
-  flexRender,
-  type RowData,
-  useTable,
-} from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { flexRender, type RowData, useTable } from "@tanstack/react-table";
+import { defaultRangeExtractor, type Range, useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 import { ColumnVisibilityMenu } from "./column-visibility-menu";
 import {
-  dataGridFeatures,
   type DataGridColumn,
   type DataGridColumnDef,
   type DataGridRow,
+  dataGridFeatures,
 } from "./features";
 import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
 import { DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
 import { DataGridFiltersMenu, InlineFilter } from "./inline-filter";
-import type {
-  DataGridProps,
-  DataGridRenderContext,
-  DataGridSlot,
-  DataGridTheme,
-} from "./types";
+import type { DataGridProps, DataGridRenderContext, DataGridSlot, DataGridTheme } from "./types";
 import { useColumnReordering } from "./use-column-reordering";
 import { useDataGridState } from "./use-data-grid-state";
 import {
@@ -56,6 +47,8 @@ const DENSITY_ROW_HEIGHT = {
   spacious: 52,
 } as const;
 
+const KEYBOARD_SCROLL_PROPS: React.HTMLAttributes<HTMLDivElement> = { tabIndex: 0 };
+
 const PIXEL_WIDTH_PATTERN = /^(\d+(?:\.\d+)?)px$/;
 
 function numericSort<TData extends RowData>(
@@ -85,9 +78,7 @@ function prepareColumns<TData extends RowData>(
         : undefined);
     const next: DataGridColumnDef<TData> = {
       ...column,
-      ...(column.size === undefined && pixelSize !== undefined
-        ? { size: pixelSize }
-        : {}),
+      ...(column.size === undefined && pixelSize !== undefined ? { size: pixelSize } : {}),
       ...(inferredMinSize !== undefined ? { minSize: inferredMinSize } : {}),
       ...(column.meta?.maxWidth !== undefined ? { maxSize: column.meta.maxWidth } : {}),
       ...(column.meta?.numericSort && !column.sortFn ? { sortFn: numericSort<TData> } : {}),
@@ -183,6 +174,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   } = props;
   const rowHeight = rowHeightProp ?? DENSITY_ROW_HEIGHT[density];
   const scrollReference = React.useRef<HTMLDivElement>(null);
+  const headerCanvasReference = React.useRef<HTMLDivElement>(null);
   const columnIds = React.useMemo(
     () => columns.map(getColumnDefinitionId).filter((id): id is string => Boolean(id)),
     [columns],
@@ -250,15 +242,40 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const hasClientFilters =
     !manualFiltering &&
     (gridState.columnFilters.length > 0 || String(gridState.globalFilter).trim().length > 0);
-  const effectiveTotalCount = hasClientFilters ? tableRows.length : Math.max(totalCount, data.length);
+  const effectiveTotalCount = hasClientFilters
+    ? tableRows.length
+    : Math.max(totalCount, data.length);
   const initialLoading = isLoading && data.length === 0;
   const initialSkeletonCount =
-    skeletonRowCount ?? Math.max(1, Math.min(effectiveTotalCount || maxVisibleRows, maxVisibleRows));
+    skeletonRowCount ??
+    Math.max(1, Math.min(effectiveTotalCount || maxVisibleRows, maxVisibleRows));
   const unloadedCount = Math.max(0, effectiveTotalCount - tableRows.length);
   const itemCount = initialLoading
     ? initialSkeletonCount
     : displayItems.length + (virtualize ? unloadedCount : 0);
   const sectionHeaderHeight = sections?.headerHeight ?? rowHeight;
+  const sectionIndexes = React.useMemo(() => {
+    const indexes: number[] = [];
+    for (let index = 0; index < displayItems.length; index += 1) {
+      if (displayItems[index]?.kind === "section") indexes.push(index);
+    }
+    return indexes;
+  }, [displayItems]);
+  const sectionIndexesReference = React.useRef(sectionIndexes);
+  sectionIndexesReference.current = sectionIndexes;
+  const activeSectionIndexReference = React.useRef<number | undefined>(sectionIndexes[0]);
+  const extractStickyRange = React.useCallback((range: Range) => {
+    let activeSectionIndex: number | undefined;
+    for (const sectionIndex of sectionIndexesReference.current) {
+      if (sectionIndex > range.startIndex) break;
+      activeSectionIndex = sectionIndex;
+    }
+    activeSectionIndexReference.current = activeSectionIndex;
+
+    const indexes = defaultRangeExtractor(range);
+    if (activeSectionIndex === undefined || indexes.includes(activeSectionIndex)) return indexes;
+    return [...indexes, activeSectionIndex].sort((left, right) => left - right);
+  }, []);
 
   const rowVirtualizer = useVirtualizer({
     count: itemCount,
@@ -274,6 +291,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     getScrollElement: () => scrollReference.current,
     initialRect: { height: 600, width: 1000 },
     overscan,
+    rangeExtractor: extractStickyRange,
   });
   const virtualItems = rowVirtualizer.getVirtualItems();
   const renderItems = virtualize
@@ -323,6 +341,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     }
   }, [data.length]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selection and data change the table model without replacing the instance
   const selectedRows = React.useMemo(
     () => table.getSelectedRowModel().flatRows.map((row) => row.original),
     [data, gridState.rowSelection, table],
@@ -365,20 +384,27 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     () => createThemeStyle(props.theme, props.style),
     [props.style, props.theme],
   );
-  const loadingIndicator =
-    renderSlot(slots.loadingIndicator, context) ?? <SpinnerIcon aria-label="Loading" role="status" />;
+  const loadingIndicator = renderSlot(slots.loadingIndicator, context) ?? (
+    <SpinnerIcon aria-label="Loading" role="status" />
+  );
   const showHeaderBand =
     enableColumnFiltering ||
     enableGlobalFilter ||
     slots.headerStart !== undefined ||
     slots.headerEnd !== undefined;
   const bodyHeight = virtualize ? rowVirtualizer.getTotalSize() : undefined;
+  const gridLabel = props["aria-label"] ?? "Data grid";
+  const handleRowsScroll = React.useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const headerCanvas = headerCanvasReference.current;
+    if (!headerCanvas) return;
+    headerCanvas.style.transform = `translate3d(${-event.currentTarget.scrollLeft}px, 0, 0)`;
+  }, []);
 
   return (
     <div
       className={cx("jt-grid", classNames.root, className)}
       data-density={density}
-      data-loading={(isLoading || isLoadingMore) || undefined}
+      data-loading={isLoading || isLoadingMore || undefined}
       data-testid={testId}
       style={themeStyle}
     >
@@ -406,7 +432,17 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
         </div>
       ) : null}
 
-      <div className="jt-grid__viewport-shell">
+      <div
+        aria-busy={isLoading || isLoadingMore}
+        aria-colcount={visibleColumns.length + (props.enableRowSelection ? 1 : 0)}
+        aria-label={gridLabel}
+        aria-rowcount={totalCount}
+        className="jt-grid__viewport-shell"
+        role="grid"
+        style={{
+          height: typeof computedHeight === "number" ? `${computedHeight}px` : computedHeight,
+        }}
+      >
         <div className="jt-grid__column-tools">
           {renderSlot(slots.columnHeaderEnd, context)}
           {enableColumnVisibility ? (
@@ -418,294 +454,340 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
             />
           ) : null}
         </div>
-        <div
-          aria-busy={isLoading || isLoadingMore}
-          aria-colcount={visibleColumns.length + (props.enableRowSelection ? 1 : 0)}
-          aria-label={props["aria-label"] ?? "Data grid"}
-          aria-rowcount={totalCount}
-          className={cx("jt-grid__viewport", classNames.viewport)}
-          data-slot="viewport"
-          ref={scrollReference}
-          role="grid"
-          style={{ height: typeof computedHeight === "number" ? `${computedHeight}px` : computedHeight }}
-          tabIndex={0}
-        >
-        <div className="jt-grid__canvas">
-          <div
-            className={cx("jt-grid__column-headers", classNames.columnHeaders)}
-            data-slot="column-headers"
-          >
-            {headerGroups.map((headerGroup, groupIndex) => (
-              <div
-                className="jt-grid__column-header-row"
-                key={headerGroup.id}
-                role="row"
-                style={{ gridTemplateColumns: gridTemplate }}
-              >
-                {props.enableRowSelection ? (
-                  <div className="jt-grid__selection-cell" role="columnheader">
-                    {groupIndex === headerGroups.length - 1 ? (
-                      <IndeterminateCheckbox
-                        aria-label="Select all loaded rows"
-                        checked={table.getIsAllRowsSelected()}
-                        indeterminate={table.getIsSomeRowsSelected()}
-                        onChange={table.getToggleAllRowsSelectedHandler()}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-                {headerGroup.headers.map((header) => {
-                  const sorted = header.column.getIsSorted();
-                  const meta = header.column.columnDef.meta;
-                  const drag = reorder.getDragProps(header);
-                  const isLeaf = header.subHeaders.length === 0;
-                  const sortDirection = sorted === false ? undefined : sorted;
-                  return (
-                    <div
-                      aria-sort={
-                        sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
-                      }
-                      className={cx(
-                        "jt-grid__column-header",
-                        classNames.columnHeader,
-                        meta?.headerClassName,
-                      )}
-                      data-align={meta?.headerAlign ?? "left"}
-                      data-column-header=""
-                      data-drag-source={drag.isDragSource || undefined}
-                      data-drop-side={drag.dropSide}
-                      key={header.id}
-                      onDragOver={drag.onDragOver}
-                      onDrop={drag.onDrop}
-                      role="columnheader"
-                      style={{ gridColumn: header.colSpan > 1 ? `span ${header.colSpan}` : undefined }}
-                    >
-                      <div className="jt-grid__column-title-row">
-                        {isLeaf && drag.draggable ? (
-                          <button
-                            aria-label={`Move ${header.column.id} column`}
-                            className="jt-grid__drag-handle"
-                            draggable
-                            onDragEnd={drag.onDragEnd}
-                            onDragStart={drag.onDragStart}
-                            onKeyDown={(event) => {
-                              if (!event.altKey) return;
-                              if (event.key === "ArrowLeft") reorder.moveBy(header.column.id, -1);
-                              if (event.key === "ArrowRight") reorder.moveBy(header.column.id, 1);
-                            }}
-                            title="Drag to reorder; Alt+Arrow keys also move this column"
-                            type="button"
-                          >
-                            <DragIcon />
-                          </button>
-                        ) : null}
-                        {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                          <button
-                            className="jt-grid__sort-button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            type="button"
-                          >
-                            <span>
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                            </span>
-                            <SortIcon direction={sortDirection} />
-                          </button>
-                        ) : (
-                          <div className="jt-grid__column-label">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </div>
-                        )}
-                        {meta?.headerTooltip ? (
-                          <span className="jt-grid__header-tooltip" tabIndex={0}>
-                            <span aria-hidden="true">?</span>
-                            <span className="jt-grid__header-tooltip-content" role="tooltip">
-                              {meta.headerTooltip}
-                            </span>
-                          </span>
-                        ) : null}
-                        {enableColumnFiltering && isLeaf && meta?.filter ? (
-                          <div className={cx("jt-grid__filter", classNames.filter)}>
-                            <InlineFilter column={header.column} config={meta.filter} />
-                          </div>
-                        ) : null}
-                      </div>
-                      {enableColumnResizing && isLeaf && meta?.resizable !== false ? (
-                        <button
-                          aria-label={`Resize ${header.column.id} column`}
-                          className="jt-grid__resize-handle"
-                          data-resizing={header.column.getIsResizing() || undefined}
-                          onDoubleClick={() => header.column.resetSize()}
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          type="button"
+        <div className="jt-grid__column-header-viewport" data-slot="column-header-viewport">
+          <div className="jt-grid__canvas jt-grid__header-canvas" ref={headerCanvasReference}>
+            <div
+              className={cx("jt-grid__column-headers", classNames.columnHeaders)}
+              data-slot="column-headers"
+            >
+              {headerGroups.map((headerGroup, groupIndex) => (
+                <div
+                  className="jt-grid__column-header-row"
+                  key={headerGroup.id}
+                  role="row"
+                  style={{ gridTemplateColumns: gridTemplate }}
+                >
+                  {props.enableRowSelection ? (
+                    <div className="jt-grid__selection-cell" role="columnheader">
+                      {groupIndex === headerGroups.length - 1 ? (
+                        <IndeterminateCheckbox
+                          aria-label="Select all loaded rows"
+                          checked={table.getIsAllRowsSelected()}
+                          indeterminate={table.getIsSomeRowsSelected()}
+                          onChange={table.getToggleAllRowsSelectedHandler()}
                         />
                       ) : null}
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          <div
-            className={cx("jt-grid__body", classNames.body)}
-            data-slot="body"
-            role="rowgroup"
-            style={{ height: bodyHeight }}
-          >
-            {props.error ? (
-              <div className={cx("jt-grid__state", "jt-grid__error", classNames.error)} role="alert">
-                {renderSlot(slots.error, context) ?? errorMessage(props.error)}
-              </div>
-            ) : !initialLoading && displayItems.length === 0 ? (
-              <div className={cx("jt-grid__state", "jt-grid__empty", classNames.empty)} role="row">
-                {renderSlot(slots.empty, context) ?? props.emptyMessage ?? "No records found."}
-              </div>
-            ) : (
-              renderItems.map((virtualItem) => {
-                const item = initialLoading ? undefined : displayItems[virtualItem.index];
-                const virtualStyle: React.CSSProperties = virtualize
-                  ? {
-                      height: `${virtualItem.size}px`,
-                      position: "absolute",
-                      transform: `translateY(${virtualItem.start}px)`,
-                    }
-                  : { minHeight: `${item?.kind === "section" ? sectionHeaderHeight : rowHeight}px` };
-
-                if (item?.kind === "section") {
-                  return (
-                    <div
-                      className={cx("jt-grid__section", classNames.sectionHeader)}
-                      data-section-key={item.key}
-                      data-slot="section-header"
-                      key={virtualItem.key}
-                      role="row"
-                      style={virtualStyle}
-                    >
-                      <div role="gridcell">
-                        {sections?.renderHeader({ key: item.key, rows: item.rows })}
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (!item || initialLoading) {
-                  return (
-                    <div
-                      aria-hidden="true"
-                      className={cx("jt-grid__row", "jt-grid__row--skeleton")}
-                      data-index={virtualItem.index}
-                      key={virtualItem.key}
-                      role="row"
-                      style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
-                    >
-                      {props.enableRowSelection ? <div className="jt-grid__selection-cell" /> : null}
-                      {visibleColumns.map((column) => {
-                        const config = column.columnDef.meta?.skeleton;
-                        const skeletonConfig = config === false ? undefined : config;
-                        const shape = config === false ? undefined : skeletonConfig?.shape ?? "bar";
-                        const width = deterministicSkeletonWidth(
-                          virtualItem.index,
-                          column.id,
-                          config === false ? 0 : skeletonConfig?.minWidth,
-                          config === false ? 0 : skeletonConfig?.maxWidth,
-                        );
-                        return (
-                          <div
-                            className={cx("jt-grid__cell", classNames.cell)}
-                            data-align={
-                              column.columnDef.meta?.cellAlign ??
-                              column.columnDef.meta?.headerAlign ??
-                              "left"
-                            }
-                            key={column.id}
-                            role="gridcell"
+                  ) : null}
+                  {headerGroup.headers.map((header) => {
+                    const sorted = header.column.getIsSorted();
+                    const meta = header.column.columnDef.meta;
+                    const drag = reorder.getDragProps(header);
+                    const isLeaf = header.subHeaders.length === 0;
+                    const sortDirection = sorted === false ? undefined : sorted;
+                    return (
+                      <div
+                        aria-sort={
+                          sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
+                        }
+                        className={cx(
+                          "jt-grid__column-header",
+                          classNames.columnHeader,
+                          meta?.headerClassName,
+                        )}
+                        data-align={meta?.headerAlign ?? "left"}
+                        data-column-header=""
+                        data-drag-source={drag.isDragSource || undefined}
+                        data-drop-side={drag.dropSide}
+                        key={header.id}
+                        onDragOver={drag.onDragOver}
+                        onDrop={drag.onDrop}
+                        role="columnheader"
+                        style={{
+                          gridColumn: header.colSpan > 1 ? `span ${header.colSpan}` : undefined,
+                        }}
+                      >
+                        <div className="jt-grid__column-title-row">
+                          {isLeaf && drag.draggable ? (
+                            <button
+                              aria-label={`Move ${header.column.id} column`}
+                              className="jt-grid__drag-handle"
+                              draggable
+                              onDragEnd={drag.onDragEnd}
+                              onDragStart={drag.onDragStart}
+                              onKeyDown={(event) => {
+                                if (!event.altKey) return;
+                                if (event.key === "ArrowLeft") reorder.moveBy(header.column.id, -1);
+                                if (event.key === "ArrowRight") reorder.moveBy(header.column.id, 1);
+                              }}
+                              title="Drag to reorder; Alt+Arrow keys also move this column"
+                              type="button"
+                            >
+                              <DragIcon />
+                            </button>
+                          ) : null}
+                          {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                            <button
+                              className="jt-grid__sort-button"
+                              onClick={header.column.getToggleSortingHandler()}
+                              type="button"
+                            >
+                              <span>
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                              </span>
+                              <SortIcon direction={sortDirection} />
+                            </button>
+                          ) : (
+                            <div className="jt-grid__column-label">
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </div>
+                          )}
+                          {meta?.headerTooltip ? (
+                            <button
+                              aria-label={`About ${header.column.id}`}
+                              className="jt-grid__header-tooltip"
+                              type="button"
+                            >
+                              <span aria-hidden="true">?</span>
+                              <span className="jt-grid__header-tooltip-content" role="tooltip">
+                                {meta.headerTooltip}
+                              </span>
+                            </button>
+                          ) : null}
+                          {enableColumnFiltering && isLeaf && meta?.filter ? (
+                            <div className={cx("jt-grid__filter", classNames.filter)}>
+                              <InlineFilter column={header.column} config={meta.filter} />
+                            </div>
+                          ) : null}
+                        </div>
+                        {enableColumnResizing && isLeaf && meta?.resizable !== false ? (
+                          <button
+                            aria-label={`Resize ${header.column.id} column`}
+                            className="jt-grid__resize-handle"
+                            data-resizing={header.column.getIsResizing() || undefined}
+                            draggable={false}
+                            onClick={(event) => event.stopPropagation()}
+                            onDoubleClick={() => header.column.resetSize()}
+                            onDragStart={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onMouseDown={header.getResizeHandler()}
+                            onTouchStart={header.getResizeHandler()}
+                            type="button"
                           >
-                            {shape ? (
-                              <span
-                                className={cx("jt-skeleton", classNames.skeleton)}
-                                data-shape={shape}
-                                style={
-                                  shape === "bar"
-                                    ? {
-                                        height: skeletonConfig?.size,
-                                        width: `${width}%`,
-                                      }
-                                    : {
-                                        height: skeletonConfig?.size ?? 28,
-                                        width: skeletonConfig?.size ?? 28,
-                                      }
-                                }
-                              />
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                }
+                            <span
+                              aria-hidden="true"
+                              className="jt-grid__resize-indicator"
+                              style={{
+                                height:
+                                  typeof computedHeight === "number"
+                                    ? `${computedHeight}px`
+                                    : computedHeight,
+                              }}
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
-                const row = item.row;
-                const canSelect = props.enableRowSelection ? row.getCanSelect() : true;
-                const rowClass =
-                  typeof props.rowClassName === "function"
-                    ? props.rowClassName(row)
-                    : props.rowClassName;
-                return (
+        <div
+          {...KEYBOARD_SCROLL_PROPS}
+          aria-label={`${gridLabel} rows`}
+          className={cx("jt-grid__viewport", "jt-grid__rows-viewport", classNames.viewport)}
+          data-slot="viewport"
+          onScroll={handleRowsScroll}
+          ref={scrollReference}
+          role="region"
+        >
+          <div className="jt-grid__canvas jt-grid__rows-canvas">
+            <div
+              className={cx("jt-grid__body", classNames.body)}
+              data-slot="body"
+              role="rowgroup"
+              style={{ height: bodyHeight }}
+            >
+              {props.error ? (
+                <div
+                  className={cx("jt-grid__state", "jt-grid__error", classNames.error)}
+                  role="alert"
+                >
+                  {renderSlot(slots.error, context) ?? errorMessage(props.error)}
+                </div>
+              ) : !initialLoading && displayItems.length === 0 ? (
+                <div
+                  className={cx("jt-grid__state", "jt-grid__empty", classNames.empty)}
+                  role="row"
+                >
+                  {renderSlot(slots.empty, context) ?? props.emptyMessage ?? "No records found."}
+                </div>
+              ) : (
+                renderItems.map((virtualItem) => {
+                  const item = initialLoading ? undefined : displayItems[virtualItem.index];
+                  const isStickySection =
+                    virtualize &&
+                    item?.kind === "section" &&
+                    activeSectionIndexReference.current === virtualItem.index;
+                  const virtualStyle: React.CSSProperties = virtualize
+                    ? isStickySection
+                      ? {
+                          height: `${virtualItem.size}px`,
+                          position: "sticky",
+                          top: 0,
+                        }
+                      : {
+                          height: `${virtualItem.size}px`,
+                          position: "absolute",
+                          transform: `translateY(${virtualItem.start}px)`,
+                        }
+                    : {
+                        minHeight: `${item?.kind === "section" ? sectionHeaderHeight : rowHeight}px`,
+                      };
+
+                  if (item?.kind === "section") {
+                    return (
+                      <div
+                        className={cx("jt-grid__section", classNames.sectionHeader)}
+                        data-section-key={item.key}
+                        data-slot="section-header"
+                        data-sticky={isStickySection || undefined}
+                        key={virtualItem.key}
+                        role="row"
+                        style={virtualStyle}
+                      >
+                        <div role="gridcell">
+                          {sections?.renderHeader({ key: item.key, rows: item.rows })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (!item || initialLoading) {
+                    return (
+                      <div
+                        aria-hidden="true"
+                        className={cx("jt-grid__row", "jt-grid__row--skeleton")}
+                        data-index={virtualItem.index}
+                        key={virtualItem.key}
+                        role="row"
+                        style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
+                      >
+                        {props.enableRowSelection ? (
+                          <div className="jt-grid__selection-cell" />
+                        ) : null}
+                        {visibleColumns.map((column) => {
+                          const config = column.columnDef.meta?.skeleton;
+                          const skeletonConfig = config === false ? undefined : config;
+                          const shape =
+                            config === false ? undefined : (skeletonConfig?.shape ?? "bar");
+                          const width = deterministicSkeletonWidth(
+                            virtualItem.index,
+                            column.id,
+                            config === false ? 0 : skeletonConfig?.minWidth,
+                            config === false ? 0 : skeletonConfig?.maxWidth,
+                          );
+                          return (
+                            <div
+                              className={cx("jt-grid__cell", classNames.cell)}
+                              data-align={
+                                column.columnDef.meta?.cellAlign ??
+                                column.columnDef.meta?.headerAlign ??
+                                "left"
+                              }
+                              key={column.id}
+                              role="gridcell"
+                            >
+                              {shape ? (
+                                <span
+                                  className={cx("jt-skeleton", classNames.skeleton)}
+                                  data-shape={shape}
+                                  style={
+                                    shape === "bar"
+                                      ? {
+                                          height: skeletonConfig?.size,
+                                          width: `${width}%`,
+                                        }
+                                      : {
+                                          height: skeletonConfig?.size ?? 28,
+                                          width: skeletonConfig?.size ?? 28,
+                                        }
+                                  }
+                                />
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+
+                  const row = item.row;
+                  const canSelect = props.enableRowSelection ? row.getCanSelect() : true;
+                  const rowClass =
+                    typeof props.rowClassName === "function"
+                      ? props.rowClassName(row)
+                      : props.rowClassName;
+                  return (
                     <div
                       className={cx("jt-grid__row", classNames.row, rowClass)}
                       aria-rowindex={virtualItem.index + 1}
                       data-disabled={!canSelect || undefined}
                       data-index={virtualItem.index}
                       data-row-id={row.id}
-                    data-state={row.getIsSelected() ? "selected" : undefined}
-                    key={virtualItem.key}
-                    onClick={() => props.onRowClick?.(row)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && props.onRowClick) props.onRowClick(row);
-                    }}
-                    role="row"
-                    style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
-                    tabIndex={props.onRowClick ? 0 : undefined}
-                  >
-                    {props.enableRowSelection ? (
-                      <div className="jt-grid__selection-cell" role="gridcell">
-                        <IndeterminateCheckbox
-                          aria-label={`Select row ${row.id}`}
-                          checked={row.getIsSelected()}
-                          disabled={!canSelect}
-                          onChange={row.getToggleSelectedHandler()}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </div>
-                    ) : null}
-                    {row.getVisibleCells().map((cell) => {
-                      const meta = cell.column.columnDef.meta;
-                      const value = cell.getValue();
-                      const content = cell.column.columnDef.cell
-                        ? flexRender(cell.column.columnDef.cell, cell.getContext())
-                        : `${meta?.prefix ?? ""}${value === null || value === undefined ? "" : String(value)}${
-                            meta?.suffix ?? ""
-                          }`;
-                      return (
-                        <div
-                          className={cx("jt-grid__cell", classNames.cell, meta?.cellClassName)}
-                          data-align={meta?.cellAlign ?? meta?.headerAlign ?? "left"}
-                          key={cell.id}
-                          role="gridcell"
-                          title={typeof content === "string" ? content : undefined}
-                        >
-                          {content}
+                      data-state={row.getIsSelected() ? "selected" : undefined}
+                      key={virtualItem.key}
+                      onClick={() => props.onRowClick?.(row)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && props.onRowClick) props.onRowClick(row);
+                      }}
+                      role="row"
+                      style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
+                      tabIndex={props.onRowClick ? 0 : undefined}
+                    >
+                      {props.enableRowSelection ? (
+                        <div className="jt-grid__selection-cell" role="gridcell">
+                          <IndeterminateCheckbox
+                            aria-label={`Select row ${row.id}`}
+                            checked={row.getIsSelected()}
+                            disabled={!canSelect}
+                            onChange={row.getToggleSelectedHandler()}
+                            onClick={(event) => event.stopPropagation()}
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })
-            )}
+                      ) : null}
+                      {row.getVisibleCells().map((cell) => {
+                        const meta = cell.column.columnDef.meta;
+                        const value = cell.getValue();
+                        const content = cell.column.columnDef.cell
+                          ? flexRender(cell.column.columnDef.cell, cell.getContext())
+                          : `${meta?.prefix ?? ""}${value === null || value === undefined ? "" : String(value)}${
+                              meta?.suffix ?? ""
+                            }`;
+                        return (
+                          <div
+                            className={cx("jt-grid__cell", classNames.cell, meta?.cellClassName)}
+                            data-align={meta?.cellAlign ?? meta?.headerAlign ?? "left"}
+                            key={cell.id}
+                            role="gridcell"
+                            title={typeof content === "string" ? content : undefined}
+                          >
+                            {content}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
-      </div>
       </div>
 
       {showFooter ? (

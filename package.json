@@ -2,14 +2,36 @@
   "name": "@jhodges/jeff-table",
   "version": "0.1.0",
   "description": "A strongly typed, virtualized, themeable React data grid built on TanStack Table v9.",
+  "license": "MIT",
+  "author": "Jeff Hodges",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhodges10/jeff-table.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jhodges10/jeff-table/issues"
+  },
+  "homepage": "https://github.com/jhodges10/jeff-table#readme",
+  "keywords": [
+    "react",
+    "data-grid",
+    "table",
+    "tanstack",
+    "virtualized",
+    "typescript"
+  ],
   "type": "module",
   "sideEffects": [
     "**/*.css"
   ],
   "files": [
     "dist",
+    "LICENSE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -24,6 +46,11 @@
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "build:storybook": "storybook build",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "ci": "bun run check && bun run typecheck && bun run test:coverage && bun run build",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
     "storybook": "storybook dev -p 6006",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -39,6 +66,7 @@
     "@tanstack/react-virtual": "^3.13.24"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.8",
     "@storybook/addon-a11y": "^10.4.2",
     "@storybook/addon-docs": "^10.4.2",
     "@storybook/react-vite": "^10.4.2",
@@ -54,7 +82,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "storybook": "^10.4.2",
-    "typescript": "^5.9.3",
+    "typescript": "7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.5"
   },

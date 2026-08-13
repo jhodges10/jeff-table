@@ -1,0 +1,61 @@
+version: 1
+
+# Labeler configuration for automatic PR labeling based on title prefixes
+#
+# Expected PR title format: (prefix)(domain): description
+# Examples:
+#   - feat(auth): add two-factor authentication
+#   - fix(billing): resolve payment processing bug
+#   - docs(api): update authentication guide
+#   - refactor(database): optimize query performance
+#
+# Supported prefixes:
+#   - feat/feature: New features
+#   - enh/enhancement, imp/improvement: Enhancements
+#   - docs/documentation: Documentation changes
+#   - fix/bugfix, bug: Bug fixes
+#   - chore: Maintenance tasks
+#   - ci: CI/CD related changes
+#   - infra/infrastructure: Infrastructure changes
+#   - refactor: Code refactoring
+#   - perf: Performance improvements
+#   - test/testing: Test-only changes
+
+labels:
+  # Features - match feat/feature/enh/enhancement/imp/improvement prefixes
+  - label: "feat"
+    title: "^(feat|feature)\\(.+\\):\\s*.+"
+  - label: "enhancement"
+    title: "^(enh|enhancement)\\(.+\\):\\s*.+"
+  - label: "improvement"
+    title: "^(imp|improvement)\\(.+\\):\\s*.+"
+
+  # Documentation - match docs/documentation prefixes
+  - label: "docs"
+    title: "^(docs|documentation)\\(.+\\):\\s*.+"
+
+  # Bug Fixes - match fix/bugfix/bug prefixes
+  - label: "fix"
+    title: "^(fix|bugfix)\\(.+\\):\\s*.+"
+  - label: "bug"
+    title: "^bug\\(.+\\):\\s*.+"
+
+  # Maintenance - match chore/ci/infra/infrastructure/refactor/perf prefixes
+  - label: "chore"
+    title: "^chore\\(.+\\):\\s*.+"
+  - label: "ci"
+    title: "^ci\\(.+\\):\\s*.+"
+  - label: "infra"
+    title: "^(infra|infrastructure)\\(.+\\):\\s*.+"
+  - label: "refactor"
+    title: "^refactor\\(.+\\):\\s*.+"
+  - label: "perf"
+    title: "^perf\\(.+\\):\\s*.+"
+
+  # Tests - match test/testing prefix
+  - label: "test"
+    title: "^(test|testing)\\(.+\\):\\s*.+"
+
+  # Catch-all for improperly formatted titles
+  - label: "needs-formatting"
+    title: "^(?!(feat|feature|enh|enhancement|imp|improvement|docs|documentation|fix|bugfix|bug|chore|ci|infra|infrastructure|refactor|perf|test|testing)\\(.+\\):\\s*.+).*$"

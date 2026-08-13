@@ -1,0 +1,114 @@
+name: "Pull Request Labeler"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  validate-title:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Title Format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const validPattern = /^(feat|feature|enh|enhancement|imp|improvement|docs|documentation|fix|bugfix|bug|chore|ci|infra|infrastructure|refactor|perf|test|testing)\(.+\):\s*.+$/;
+
+            // Get existing comments to find any previous title format comments
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body.includes('PR Title Format')
+            );
+
+            if (!validPattern.test(title)) {
+              const errorComment = `## ❌ PR Title Format Error
+
+            Your PR title doesn't follow the required naming convention.
+
+            **Current title:** \`${title}\`
+
+            **Expected format:** \`(prefix)(domain): description\`
+
+            **Examples:**
+            - \`feat(Auth): add two-factor authentication\`
+            - \`fix(Billing): resolve payment processing bug\`
+            - \`docs(API): update authentication guide\`
+            - \`refactor(Database): optimize query performance\`
+
+            **Supported prefixes:**
+            - \`feat/feature\`: New features
+            - \`enh/enhancement\`, \`imp/improvement\`: Enhancements
+            - \`docs/documentation\`: Documentation changes
+            - \`fix/bugfix\`, \`bug\`: Bug fixes
+            - \`chore\`: Maintenance tasks
+            - \`ci\`: CI/CD related changes
+            - \`infra/infrastructure\`: Infrastructure changes
+            - \`refactor\`: Code refactoring
+            - \`perf\`: Performance improvements
+            - \`test/testing\`: Test-only changes
+
+            Please update your PR title to match this format.`;
+
+              if (botComment) {
+                // Update existing comment
+                await github.rest.issues.updateComment({
+                  comment_id: botComment.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: errorComment
+                });
+              } else {
+                // Create new comment
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: errorComment
+                });
+              }
+
+              core.setFailed('PR title does not follow the required naming convention');
+            } else {
+              // Title is valid - update comment to show success if one exists
+              if (botComment) {
+                const successComment = `## ✅ PR Title Format Valid
+
+            Great! Your PR title now follows the required naming convention.
+
+            **Current title:** \`${title}\``;
+
+                await github.rest.issues.updateComment({
+                  comment_id: botComment.id,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: successComment
+                });
+              }
+            }
+
+  labeler:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    needs: validate-title
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - id: label-the-PR
+        uses: srvaroa/labeler@master
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        with:
+          config_path: .github/labeler-config.yml

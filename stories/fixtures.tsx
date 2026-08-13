@@ -52,9 +52,7 @@ export function makePeople(count: number, offset = 0): Person[] {
       department: departments[index % departments.length] ?? "Engineering",
       email: `${first}.${last}.${index}@example.com`.toLocaleLowerCase(),
       id: `person-${index + 1}`,
-      joined: new Date(2021 + (index % 5), index % 12, (index % 25) + 1)
-        .toISOString()
-        .slice(0, 10),
+      joined: new Date(2021 + (index % 5), index % 12, (index % 25) + 1).toISOString().slice(0, 10),
       name: `${first} ${last}`,
       status: statuses[index % statuses.length] ?? "Active",
     };
@@ -91,7 +89,11 @@ export const personColumns: DataGridColumnDef<Person>[] = [
   {
     accessorKey: "email",
     header: "Email",
-    meta: { filter: { placeholder: "Find an email…", type: "text" }, minWidth: 220, width: "1.5fr" },
+    meta: {
+      filter: { placeholder: "Find an email…", type: "text" },
+      minWidth: 220,
+      width: "1.5fr",
+    },
   },
   {
     accessorKey: "department",
@@ -118,7 +120,11 @@ export const personColumns: DataGridColumnDef<Person>[] = [
     },
     cell: ({ getValue }) => {
       const status = String(getValue());
-      return <span className="story-status" data-status={status}>{status}</span>;
+      return (
+        <span className="story-status" data-status={status}>
+          {status}
+        </span>
+      );
     },
   },
   {

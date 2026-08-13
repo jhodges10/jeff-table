@@ -11,8 +11,9 @@ import {
 
 describe("data grid utilities", () => {
   it("reconciles removed, duplicate, and newly added columns", () => {
-    expect(reconcileColumnOrder(["name", "status", "email"], ["status", "old", "status", "name"]))
-      .toEqual(["status", "name", "email"]);
+    expect(
+      reconcileColumnOrder(["name", "status", "email"], ["status", "old", "status", "name"]),
+    ).toEqual(["status", "name", "email"]);
   });
 
   it("moves a column on either side of a target", () => {
@@ -34,7 +35,9 @@ describe("data grid utilities", () => {
   });
 
   it("caps the derived viewport at the visible row limit", () => {
-    expect(calculateViewportHeight({ rowHeight: 40, totalCount: 100, maxVisibleRows: 10 })).toBe(440);
+    expect(calculateViewportHeight({ rowHeight: 40, totalCount: 100, maxVisibleRows: 10 })).toBe(
+      440,
+    );
     expect(calculateViewportHeight({ rowHeight: 40, totalCount: 2, maxVisibleRows: 10 })).toBe(120);
   });
 });
@@ -89,8 +92,12 @@ describe("filter matching", () => {
   it("matches inclusive number and date ranges", () => {
     expect(matchesColumnFilter(50, ["50", "100"], { type: "number-range" })).toBe(true);
     expect(matchesColumnFilter(101, ["50", "100"], { type: "number-range" })).toBe(false);
-    expect(matchesColumnFilter("2026-06-15", ["2026-01-01", "2026-12-31"], { type: "date-range" })).toBe(true);
+    expect(
+      matchesColumnFilter("2026-06-15", ["2026-01-01", "2026-12-31"], { type: "date-range" }),
+    ).toBe(true);
     expect(matchesColumnFilter("not-a-number", ["", ""], { type: "number-range" })).toBe(false);
-    expect(matchesColumnFilter("not-a-date", ["2026-01-01", ""], { type: "date-range" })).toBe(false);
+    expect(matchesColumnFilter("not-a-date", ["2026-01-01", ""], { type: "date-range" })).toBe(
+      false,
+    );
   });
 });
