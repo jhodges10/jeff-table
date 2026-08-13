@@ -17,7 +17,7 @@ import {
 import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
 import { DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
-import { InlineFilter } from "./inline-filter";
+import { DataGridFiltersMenu, InlineFilter } from "./inline-filter";
 import type {
   DataGridProps,
   DataGridRenderContext,
@@ -356,7 +356,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const computedHeight =
     height ??
     calculateViewportHeight({
-      headerRows: enableColumnFiltering ? 2 : 1,
+      headerRows: 1,
       maxVisibleRows,
       rowHeight,
       totalCount: initialLoading ? initialSkeletonCount : Math.max(1, effectiveTotalCount),
@@ -368,7 +368,10 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const loadingIndicator =
     renderSlot(slots.loadingIndicator, context) ?? <SpinnerIcon aria-label="Loading" role="status" />;
   const showHeaderBand =
-    enableGlobalFilter || slots.headerStart !== undefined || slots.headerEnd !== undefined;
+    enableColumnFiltering ||
+    enableGlobalFilter ||
+    slots.headerStart !== undefined ||
+    slots.headerEnd !== undefined;
   const bodyHeight = virtualize ? rowVirtualizer.getTotalSize() : undefined;
 
   return (
@@ -394,6 +397,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                 />
               </label>
             ) : null}
+            {enableColumnFiltering ? <DataGridFiltersMenu table={table} /> : null}
             {renderSlot(slots.headerStart, context)}
           </div>
           <div className={cx("jt-grid__header-end", classNames.headerEnd)}>
@@ -519,12 +523,12 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                             </span>
                           </span>
                         ) : null}
+                        {enableColumnFiltering && isLeaf && meta?.filter ? (
+                          <div className={cx("jt-grid__filter", classNames.filter)}>
+                            <InlineFilter column={header.column} config={meta.filter} />
+                          </div>
+                        ) : null}
                       </div>
-                      {enableColumnFiltering && isLeaf && meta?.filter ? (
-                        <div className={cx("jt-grid__filter", classNames.filter)}>
-                          <InlineFilter column={header.column} config={meta.filter} />
-                        </div>
-                      ) : null}
                       {enableColumnResizing && isLeaf && meta?.resizable !== false ? (
                         <button
                           aria-label={`Resize ${header.column.id} column`}

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import { DataGrid, type DataGridProps } from "../src";
 import { people, personColumns, type Person } from "./fixtures";
 
@@ -40,6 +40,30 @@ export const InlineFilters: Story = {
   args: {
     enableColumnFiltering: true,
     height: 560,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const nameFilter = canvas.getByLabelText("Filter name");
+
+    await userEvent.click(nameFilter);
+    await userEvent.type(canvas.getByRole("searchbox", { name: "Filter value" }), "Margaret");
+    await waitFor(() => {
+      expect(canvas.getAllByText("Margaret Borg").length).toBeGreaterThan(0);
+      expect(canvas.queryByText("Grace Hamilton")).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(nameFilter);
+    const filtersMenu = canvas.getByLabelText("Column filters");
+    await expect(within(filtersMenu).getByText("1")).toBeVisible();
+    await userEvent.click(filtersMenu);
+    const menu = filtersMenu.closest("details");
+    await expect(menu).not.toBeNull();
+    await expect(within(menu as HTMLElement).getByText("1 active")).toBeVisible();
+    await userEvent.click(
+      within(menu as HTMLElement).getByRole("button", { name: "Clear all filters" }),
+    );
+    await expect(canvas.getAllByText("Grace Hamilton").length).toBeGreaterThan(0);
+    await userEvent.click(filtersMenu);
   },
 };
 

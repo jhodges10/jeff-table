@@ -138,14 +138,29 @@ describe("DataGrid", () => {
     expect(screen.queryByText("Ada Lovelace")).not.toBeInTheDocument();
   });
 
-  it("uses the same state for inline filters", async () => {
+  it("shares filter state between the Compflow-style header popover and toolbar menu", async () => {
     const user = userEvent.setup();
     render(
       <DataGrid columns={columns} data={rows} enableColumnFiltering totalCount={3} virtualize={false} />,
     );
-    await user.type(screen.getByRole("searchbox", { name: "Filter name" }), "Margaret");
-    expect(screen.getByText("Margaret Hamilton")).toBeVisible();
-    expect(screen.queryByText("Grace Hopper")).not.toBeInTheDocument();
+    const nameTrigger = screen.getByLabelText("Filter name");
+    expect(screen.queryByRole("searchbox", { name: "Filter value" })).not.toBeInTheDocument();
+    await user.click(nameTrigger);
+    await user.type(screen.getByRole("searchbox", { name: "Filter value" }), "Margaret");
+    await waitFor(() => {
+      expect(screen.getByText("Margaret Hamilton")).toBeVisible();
+      expect(screen.queryByText("Grace Hopper")).not.toBeInTheDocument();
+    });
+
+    await user.click(nameTrigger);
+    const menuTrigger = screen.getByLabelText("Column filters");
+    expect(within(menuTrigger).getByText("1")).toBeVisible();
+    await user.click(menuTrigger);
+    const menu = menuTrigger.closest("details");
+    expect(menu).not.toBeNull();
+    expect(within(menu as HTMLElement).getByText("1 active")).toBeVisible();
+    await user.click(within(menu as HTMLElement).getByRole("button", { name: "Clear all filters" }));
+    expect(screen.getByText("Grace Hopper")).toBeVisible();
   });
 
   it("supports select, boolean, multi-select, number-range, and date-range filters", async () => {
@@ -160,16 +175,28 @@ describe("DataGrid", () => {
       />,
     );
 
-    const status = screen.getByRole("combobox", { name: "Filter status" });
-    await user.selectOptions(status, "Active");
+    const status = screen.getByLabelText("Filter status");
+    await user.click(status);
+    const statusDetails = status.closest("details");
+    expect(statusDetails).not.toBeNull();
+    await user.click(within(statusDetails as HTMLElement).getByRole("button", { name: "Active" }));
     expect(screen.getByText("75")).toBeVisible();
     expect(screen.queryByText("25")).not.toBeInTheDocument();
-    await user.selectOptions(status, "");
+    await user.click(status);
+    await user.click(
+      within(statusDetails as HTMLElement).getByRole("button", { name: "Clear filter" }),
+    );
 
-    const active = screen.getByRole("combobox", { name: "Filter active" });
-    await user.selectOptions(active, "true");
+    const active = screen.getByLabelText("Filter active");
+    await user.click(active);
+    const activeDetails = active.closest("details");
+    expect(activeDetails).not.toBeNull();
+    await user.click(within(activeDetails as HTMLElement).getByRole("button", { name: "Yes" }));
     expect(screen.getByText("75")).toBeVisible();
-    await user.selectOptions(active, "");
+    await user.click(active);
+    await user.click(
+      within(activeDetails as HTMLElement).getByRole("button", { name: "Clear filter" }),
+    );
 
     const tagsSummary = screen.getByLabelText("Filter tags");
     await user.click(tagsSummary);

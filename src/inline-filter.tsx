@@ -1,34 +1,308 @@
 import type { RowData } from "@tanstack/react-table";
-import type { ChangeEvent } from "react";
-import type { DataGridColumn } from "./features";
-import type { DataGridColumnFilterConfig } from "./types";
+import * as React from "react";
+import type { DataGridColumn, DataGridInstance } from "./features";
+import type { DataGridColumnFilterConfig, DataGridFilterOption } from "./types";
+
+type FilterValue = string | string[] | undefined;
+
+interface ColumnFilterEditorProps {
+  config: DataGridColumnFilterConfig;
+  onChange: (value: FilterValue) => void;
+  onDone?: () => void;
+  value: FilterValue;
+}
 
 interface InlineFilterProps<TData extends RowData> {
   column: DataGridColumn<TData>;
   config: DataGridColumnFilterConfig;
 }
 
-function RangeFilter<TData extends RowData>({
-  column,
-  config,
-}: InlineFilterProps<TData>) {
-  const current = column.getFilterValue();
-  const values = Array.isArray(current) ? current.map(String) : ["", ""];
-  const inputType = config.type === "date-range" ? "date" : "number";
-  const labels = config.type === "date-range" ? ["Start", "End"] : ["Minimum", "Maximum"];
+function FilterIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
+      <path
+        d="M4 6h16M7 12h10M10 18h4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15">
+      <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m16.5 16.5 4 4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
 
-  const update = (index: number, value: string) => {
-    const next = [values[0] ?? "", values[1] ?? ""];
-    next[index] = value;
-    column.setFilterValue(next.every((entry) => entry === "") ? undefined : next);
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15">
+      <path
+        d="m5 12 4 4L19 6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function ChevronIcon({ direction = "right" }: { direction?: "left" | "right" }) {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
+      <path
+        d={direction === "left" ? "m15 18-6-6 6-6" : "m9 18 6-6-6-6"}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function normalizeFilterValue(value: unknown): FilterValue {
+  if (Array.isArray(value)) return value.map(String);
+  if (value === undefined || value === null || value === "") return undefined;
+  return String(value);
+}
+
+function isFilterValueActive(value: FilterValue): boolean {
+  return Array.isArray(value) ? value.some(Boolean) : Boolean(value);
+}
+
+function getActiveCount(value: FilterValue, config: DataGridColumnFilterConfig): number {
+  if (!isFilterValueActive(value)) return 0;
+  if (config.type === "multi-select") return Array.isArray(value) ? value.length : 0;
+  if ((config.type === "date-range" || config.type === "number-range") && Array.isArray(value)) {
+    return value.filter(Boolean).length;
+  }
+  return 1;
+}
+
+function FilterClearButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button className="jt-filter-editor__clear" onClick={onClick} type="button">
+      <span aria-hidden="true">Ã—</span>
+      {label}
+    </button>
+  );
+}
+
+function OptionContent({
+  config,
+  option,
+}: {
+  config: DataGridColumnFilterConfig;
+  option: DataGridFilterOption;
+}) {
+  return config.renderOption?.(option) ?? option.label;
+}
+
+function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEditorProps) {
+  const [search, setSearch] = React.useState("");
+  const options = config.options ?? [];
+  const selected = Array.isArray(value) ? value : value ? [value] : [];
+  const isMulti = config.type === "multi-select";
+  const filteredOptions = React.useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return query
+      ? options.filter((option) => option.label.toLocaleLowerCase().includes(query))
+      : options;
+  }, [options, search]);
+
+  const select = (optionValue: string) => {
+    if (!isMulti) {
+      onChange(optionValue);
+      onDone?.();
+      return;
+    }
+    const next = selected.includes(optionValue)
+      ? selected.filter((item) => item !== optionValue)
+      : [...selected, optionValue];
+    onChange(next.length > 0 ? next : undefined);
   };
 
   return (
-    <details className="jt-filter jt-filter--range" onClick={(event) => event.stopPropagation()}>
-      <summary aria-label={`Filter ${column.id}`}>
-        {values.some(Boolean) ? "Filtered" : config.placeholder ?? "Any"}
-      </summary>
-      <div className="jt-filter__popover">
+    <div className="jt-filter-editor">
+      {options.length >= 8 ? (
+        <label className="jt-filter-editor__search">
+          <SearchIcon />
+          <span className="jt-sr-only">Search filter options</span>
+          <input
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search optionsâ€¦"
+            type="search"
+            value={search}
+          />
+        </label>
+      ) : null}
+      <div className="jt-filter-editor__options">
+        {filteredOptions.length === 0 ? (
+          <p className="jt-filter-editor__empty">No options found</p>
+        ) : (
+          filteredOptions.map((option) => {
+            const checked = selected.includes(option.value);
+            return isMulti ? (
+              <label
+                className="jt-filter-editor__option"
+                data-selected={checked || undefined}
+                key={option.value}
+              >
+                <span>
+                  <OptionContent config={config} option={option} />
+                </span>
+                <input checked={checked} onChange={() => select(option.value)} type="checkbox" />
+              </label>
+            ) : (
+              <button
+                className="jt-filter-editor__option"
+                data-selected={checked || undefined}
+                key={option.value}
+                onClick={() => select(option.value)}
+                type="button"
+              >
+                <span>
+                  <OptionContent config={config} option={option} />
+                </span>
+                <span className="jt-filter-editor__check" data-visible={checked || undefined}>
+                  <CheckIcon />
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+      {selected.length > 0 ? (
+        <FilterClearButton
+          label={isMulti ? "Clear filters" : "Clear filter"}
+          onClick={() => {
+            onChange(undefined);
+            if (!isMulti) onDone?.();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TextFilterEditor({ config, onChange, value }: ColumnFilterEditorProps) {
+  const [localValue, setLocalValue] = React.useState(typeof value === "string" ? value : "");
+  const inputReference = React.useRef<HTMLInputElement>(null);
+  const timerReference = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    inputReference.current?.focus();
+  }, []);
+
+  React.useEffect(() => {
+    setLocalValue(typeof value === "string" ? value : "");
+  }, [value]);
+
+  React.useEffect(
+    () => () => {
+      if (timerReference.current) clearTimeout(timerReference.current);
+    },
+    [],
+  );
+
+  const update = (nextValue: string) => {
+    setLocalValue(nextValue);
+    if (timerReference.current) clearTimeout(timerReference.current);
+    timerReference.current = setTimeout(() => onChange(nextValue || undefined), 250);
+  };
+
+  return (
+    <div className="jt-filter-editor jt-filter-editor--text">
+      <label className="jt-filter-editor__search">
+        <SearchIcon />
+        <span className="jt-sr-only">Filter value</span>
+        <input
+          onChange={(event) => update(event.target.value)}
+          placeholder={config.placeholder ?? "Filterâ€¦"}
+          ref={inputReference}
+          type="search"
+          value={localValue}
+        />
+      </label>
+      {localValue ? (
+        <button
+          aria-label="Clear filter"
+          className="jt-filter-editor__input-clear"
+          onClick={() => {
+            if (timerReference.current) clearTimeout(timerReference.current);
+            setLocalValue("");
+            onChange(undefined);
+          }}
+          type="button"
+        >
+          Ã—
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function BooleanFilterEditor({ onChange, onDone, value }: ColumnFilterEditorProps) {
+  const selected = Array.isArray(value) ? value[0] : value;
+  return (
+    <div className="jt-filter-editor">
+      <div className="jt-filter-editor__options">
+        {[
+          { label: "Yes", value: "true" },
+          { label: "No", value: "false" },
+        ].map((option) => {
+          const checked = selected === option.value;
+          return (
+            <button
+              className="jt-filter-editor__option"
+              data-selected={checked || undefined}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                onDone?.();
+              }}
+              type="button"
+            >
+              <span>{option.label}</span>
+              <span className="jt-filter-editor__check" data-visible={checked || undefined}>
+                <CheckIcon />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {selected !== undefined ? (
+        <FilterClearButton
+          label="Clear filter"
+          onClick={() => {
+            onChange(undefined);
+            onDone?.();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function RangeFilterEditor({ config, onChange, value }: ColumnFilterEditorProps) {
+  const values = Array.isArray(value) ? value : ["", ""];
+  const isDate = config.type === "date-range";
+  const labels = isDate ? ["Start", "End"] : ["Minimum", "Maximum"];
+  const update = (index: number, nextValue: string) => {
+    const next = [values[0] ?? "", values[1] ?? ""];
+    next[index] = nextValue;
+    onChange(next.some(Boolean) ? next : undefined);
+  };
+
+  return (
+    <div className="jt-filter-editor jt-filter-editor--range">
+      <div className="jt-filter-editor__range-fields">
         {labels.map((label, index) => (
           <label key={label}>
             <span>{label}</span>
@@ -37,95 +311,168 @@ function RangeFilter<TData extends RowData>({
               min={config.min}
               onChange={(event) => update(index, event.target.value)}
               step={config.step}
-              type={inputType}
+              type={isDate ? "date" : "number"}
               value={values[index] ?? ""}
             />
           </label>
         ))}
       </div>
-    </details>
+      {values.some(Boolean) ? (
+        <FilterClearButton
+          label={isDate ? "Clear dates" : "Clear range"}
+          onClick={() => onChange(undefined)}
+        />
+      ) : null}
+    </div>
   );
 }
 
-function MultiSelectFilter<TData extends RowData>({
-  column,
-  config,
-}: InlineFilterProps<TData>) {
-  const current = column.getFilterValue();
-  const selected = new Set(Array.isArray(current) ? current.map(String) : []);
+function ColumnFilterEditor(props: ColumnFilterEditorProps) {
+  if (props.config.type === "text") return <TextFilterEditor {...props} />;
+  if (props.config.type === "boolean") return <BooleanFilterEditor {...props} />;
+  if (props.config.type === "date-range" || props.config.type === "number-range") {
+    return <RangeFilterEditor {...props} />;
+  }
+  return <SelectFilterEditor {...props} />;
+}
 
-  return (
-    <details className="jt-filter jt-filter--multi" onClick={(event) => event.stopPropagation()}>
-      <summary aria-label={`Filter ${column.id}`}>
-        {selected.size > 0 ? `${selected.size} selected` : config.placeholder ?? "Any"}
-      </summary>
-      <div className="jt-filter__popover">
-        {config.options?.map((option) => (
-          <label key={option.value}>
-            <input
-              checked={selected.has(option.value)}
-              onChange={(event) => {
-                const next = new Set(selected);
-                if (event.target.checked) next.add(option.value);
-                else next.delete(option.value);
-                column.setFilterValue(next.size > 0 ? [...next] : undefined);
-              }}
-              type="checkbox"
-            />
-            <span>{config.renderOption?.(option) ?? option.label}</span>
-          </label>
-        ))}
-      </div>
-    </details>
-  );
+function stopHeaderActivation(event: React.SyntheticEvent) {
+  event.stopPropagation();
 }
 
 export function InlineFilter<TData extends RowData>({ column, config }: InlineFilterProps<TData>) {
-  if (config.type === "multi-select") {
-    return <MultiSelectFilter column={column} config={config} />;
-  }
-  if (config.type === "date-range" || config.type === "number-range") {
-    return <RangeFilter column={column} config={config} />;
-  }
-
-  if (config.type === "text") {
-    return (
-      <input
-        aria-label={`Filter ${column.id}`}
-        className="jt-filter jt-filter--text"
-        onChange={(event) => column.setFilterValue(event.target.value || undefined)}
-        onClick={(event) => event.stopPropagation()}
-        placeholder={config.placeholder ?? "Filter…"}
-        type="search"
-        value={String(column.getFilterValue() ?? "")}
-      />
-    );
-  }
-
-  const options =
-    config.type === "boolean"
-      ? [
-          { label: "Yes", value: "true" },
-          { label: "No", value: "false" },
-        ]
-      : (config.options ?? []);
+  const detailsReference = React.useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = React.useState(false);
+  const value = normalizeFilterValue(column.getFilterValue());
+  const activeCount = getActiveCount(value, config);
+  const close = () => {
+    if (detailsReference.current) detailsReference.current.open = false;
+    setOpen(false);
+  };
 
   return (
-    <select
-      aria-label={`Filter ${column.id}`}
-      className="jt-filter jt-filter--select"
-      onChange={(event: ChangeEvent<HTMLSelectElement>) =>
-        column.setFilterValue(event.target.value || undefined)
-      }
-      onClick={(event) => event.stopPropagation()}
-      value={String(column.getFilterValue() ?? "")}
+    <details
+      className="jt-column-filter"
+      onClick={stopHeaderActivation}
+      onKeyDown={stopHeaderActivation}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      ref={detailsReference}
     >
-      <option value="">{config.placeholder ?? "Any"}</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+      <summary
+        aria-label={`Filter ${column.id}`}
+        className="jt-column-filter__trigger"
+        data-active={activeCount > 0 || undefined}
+      >
+        <FilterIcon />
+        {activeCount > 0 ? <span className="jt-filter-count">{activeCount}</span> : null}
+      </summary>
+      {open ? (
+        <div className="jt-filter__popover">
+          <ColumnFilterEditor
+            config={config}
+            onChange={(nextValue) => column.setFilterValue(nextValue)}
+            onDone={close}
+            value={value}
+          />
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
+function getColumnLabel<TData extends RowData>(column: DataGridColumn<TData>): string {
+  return typeof column.columnDef.header === "string" ? column.columnDef.header : column.id;
+}
+
+export function DataGridFiltersMenu<TData extends RowData>({
+  table,
+}: {
+  table: DataGridInstance<TData>;
+}) {
+  const detailsReference = React.useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = React.useState(false);
+  const [activeColumnId, setActiveColumnId] = React.useState<string>();
+  const columns = table
+    .getAllLeafColumns()
+    .filter((column) => column.columnDef.meta?.filter !== undefined);
+  if (columns.length === 0) return null;
+
+  const filters = new Map<string, FilterValue>(
+    table.state.columnFilters.map((filter) => [filter.id, normalizeFilterValue(filter.value)]),
+  );
+  const activeCount = columns.reduce((count, column) => {
+    const config = column.columnDef.meta?.filter;
+    return config ? count + getActiveCount(filters.get(column.id), config) : count;
+  }, 0);
+  const activeColumn = columns.find((column) => column.id === activeColumnId);
+  const activeConfig = activeColumn?.columnDef.meta?.filter;
+
+  return (
+    <details
+      className="jt-filters-menu"
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+        if (!event.currentTarget.open) setActiveColumnId(undefined);
+      }}
+      ref={detailsReference}
+    >
+      <summary aria-label="Column filters" className="jt-filters-menu__trigger">
+        <FilterIcon />
+        <span>Filters</span>
+        {activeCount > 0 ? <span className="jt-filter-count">{activeCount}</span> : null}
+      </summary>
+      {open ? (
+        <div className="jt-filter__popover jt-filters-menu__popover">
+          {activeColumn && activeConfig ? (
+            <>
+              <button
+                className="jt-filters-menu__back"
+                onClick={() => setActiveColumnId(undefined)}
+                type="button"
+              >
+                <ChevronIcon direction="left" />
+                {getColumnLabel(activeColumn)}
+              </button>
+              <div className="jt-filters-menu__separator" />
+              <ColumnFilterEditor
+                config={activeConfig}
+                onChange={(nextValue) => activeColumn.setFilterValue(nextValue)}
+                onDone={() => setActiveColumnId(undefined)}
+                value={filters.get(activeColumn.id)}
+              />
+            </>
+          ) : (
+            <>
+              <div className="jt-filters-menu__columns">
+                {columns.map((column) => {
+                  const config = column.columnDef.meta?.filter;
+                  const count = config ? getActiveCount(filters.get(column.id), config) : 0;
+                  return (
+                    <button
+                      className="jt-filters-menu__column"
+                      key={column.id}
+                      onClick={() => setActiveColumnId(column.id)}
+                      type="button"
+                    >
+                      <span>{getColumnLabel(column)}</span>
+                      <span className="jt-filters-menu__column-status">
+                        {count > 0 ? `${count} active` : null}
+                        <ChevronIcon />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {activeCount > 0 ? (
+                <FilterClearButton
+                  label="Clear all filters"
+                  onClick={() => table.setColumnFilters([])}
+                />
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+    </details>
   );
 }
