@@ -146,6 +146,20 @@ export const StableSelectionAndRangeSelection: Story = {
       ),
     },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const firstRow = canvas.getByRole("checkbox", { name: "Select row person-1" });
+    const selectAll = canvas.getByRole("checkbox", { name: "Select all loaded rows" });
+
+    await expect(firstRow.closest(".jt-check")).toHaveAttribute("data-state", "unchecked");
+    await userEvent.click(firstRow);
+    await expect(firstRow.closest(".jt-check")).toHaveAttribute("data-state", "checked");
+    await expect(
+      firstRow.closest(".jt-check")?.querySelector(".jt-check__icon--checked path"),
+    ).toHaveAttribute("pathLength", "1");
+    await expect(selectAll).toHaveAttribute("aria-checked", "mixed");
+    await expect(selectAll.closest(".jt-check")).toHaveAttribute("data-state", "indeterminate");
+  },
 };
 
 export const SeparateHeaderAndFooterSlots: Story = {

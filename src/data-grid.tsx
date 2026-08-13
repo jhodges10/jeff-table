@@ -670,13 +670,12 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                   >
                     {props.enableRowSelection ? (
                       <div className="jt-grid__selection-cell" role="gridcell">
-                        <input
+                        <IndeterminateCheckbox
                           aria-label={`Select row ${row.id}`}
                           checked={row.getIsSelected()}
                           disabled={!canSelect}
                           onChange={row.getToggleSelectedHandler()}
                           onClick={(event) => event.stopPropagation()}
-                          type="checkbox"
                         />
                       </div>
                     ) : null}
