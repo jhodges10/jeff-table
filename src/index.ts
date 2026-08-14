@@ -1,5 +1,12 @@
 export { DataGrid } from "./data-grid";
 export {
+  DateRangePicker,
+  DateRangePickerPanel,
+  type DateRangePickerPanelProps,
+  type DateRangePickerProps,
+  type DateRangeValue,
+} from "./date-range-picker";
+export {
   type DataGridColumn,
   type DataGridColumnDef,
   type DataGridFeatures,
@@ -9,6 +16,10 @@ export {
   type DataGridTable,
   dataGridFeatures,
 } from "./features";
+export {
+  IndeterminateCheckbox,
+  type IndeterminateCheckboxProps,
+} from "./indeterminate-checkbox";
 export {
   createLocalStoragePreferenceStorage,
   parseDataGridPreferences,
@@ -26,6 +37,7 @@ export type {
   DataGridPreferences,
   DataGridProps,
   DataGridRenderContext,
+  DataGridSectionSelectionContext,
   DataGridSections,
   DataGridSelectionProps,
   DataGridSkeletonConfig,

@@ -19,7 +19,7 @@ const preview: Preview = {
     a11y: { test: "todo" },
     options: {
       storySort: {
-        order: ["DataGrid", ["Overview", "Features", "States", "Theming"]],
+        order: ["DataGrid", ["Overview", "Features", "Components", "States", "Theming"]],
       },
     },
   },

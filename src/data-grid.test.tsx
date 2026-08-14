@@ -113,6 +113,38 @@ describe("DataGrid", () => {
     expect(headerCanvas?.style.transform).toBe("translate3d(-90px, 0, 0)");
   });
 
+  it("uses the rows canvas width for the separately rendered column headers", () => {
+    const getBoundingClientRect = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function mockGridBounds(this: HTMLElement) {
+        const width = this.classList.contains("jt-grid__rows-canvas") ? 980 : 1000;
+        return {
+          bottom: 0,
+          height: 0,
+          left: 0,
+          right: width,
+          toJSON: () => ({}),
+          top: 0,
+          width,
+          x: 0,
+          y: 0,
+        };
+      });
+
+    try {
+      const { container } = render(
+        <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
+      );
+      const headerCanvas = container.querySelector<HTMLElement>(".jt-grid__header-canvas");
+      const rowsCanvas = container.querySelector<HTMLElement>(".jt-grid__rows-canvas");
+
+      expect(rowsCanvas?.getBoundingClientRect().width).toBe(980);
+      expect(headerCanvas?.style.width).toBe("980px");
+    } finally {
+      getBoundingClientRect.mockRestore();
+    }
+  });
+
   it("renders section headers without changing the flat column contract", () => {
     render(
       <DataGrid
@@ -130,6 +162,46 @@ describe("DataGrid", () => {
     expect(screen.getByText("B: 1")).toBeVisible();
   });
 
+  it("provides a section selection slot that selects its selectable nested rows", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableRowSelection
+        getRowId={(row) => row.id}
+        sections={{
+          getKey: (row) => row.team,
+          renderHeader: ({ key }) => `Group ${key}`,
+          renderSelection: ({ checked, indeterminate, key, toggle }) => (
+            <button
+              aria-label={`Toggle group ${key}`}
+              aria-pressed={checked}
+              data-indeterminate={indeterminate}
+              onClick={() => toggle()}
+              type="button"
+            />
+          ),
+        }}
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+
+    const groupASelection = screen.getByRole("button", { name: "Toggle group A" });
+    await user.click(screen.getByRole("checkbox", { name: "Select row 1" }));
+    expect(groupASelection).toHaveAttribute("data-indeterminate", "true");
+
+    const groupASelectionCell = groupASelection.closest<HTMLElement>(".jt-grid__section-selection");
+    expect(groupASelectionCell).not.toBeNull();
+    await user.click(defined(groupASelectionCell));
+    expect(groupASelection).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("checkbox", { name: "Select row 1" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select row 2" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select row 3" })).not.toBeChecked();
+    expect(screen.getByText("2 selected")).toBeVisible();
+  });
+
   it("keeps the active section sticky while virtualized and hands off to the next group", async () => {
     const offsetHeight = vi
       .spyOn(HTMLElement.prototype, "offsetHeight", "get")
@@ -141,7 +213,7 @@ describe("DataGrid", () => {
       team: index < 20 ? "A" : "B",
     }));
     try {
-      render(
+      const { container } = render(
         <DataGrid
           columns={columns}
           data={groupedRows}
@@ -159,6 +231,10 @@ describe("DataGrid", () => {
       const viewport = screen.getByRole("region", { name: "Data grid rows" });
       const groupA = (await screen.findByText("Group A")).closest('[data-slot="section-header"]');
       expect(groupA).toHaveAttribute("data-sticky", "true");
+      const firstNestedRow = container.querySelector<HTMLElement>('[data-row-id="0"]');
+      expect(firstNestedRow?.style.position).toBe("absolute");
+      expect(firstNestedRow?.style.top).toBe("0px");
+      expect(firstNestedRow?.style.transform).toBe("translateY(40px)");
 
       Object.defineProperty(viewport, "scrollTop", { configurable: true, value: 850 });
       fireEvent.scroll(viewport);
@@ -301,7 +377,11 @@ describe("DataGrid", () => {
     await user.click(tagsSummary);
     const tagsDetails = tagsSummary.closest("details");
     expect(tagsDetails).not.toBeNull();
-    await user.click(within(tagsDetails as HTMLElement).getByRole("checkbox", { name: "Red" }));
+    const redFilter = within(tagsDetails as HTMLElement).getByRole("checkbox", { name: "Red" });
+    expect(redFilter).toHaveClass("jt-check__input");
+    expect(redFilter.closest(".jt-check")).toHaveAttribute("data-state", "unchecked");
+    await user.click(redFilter);
+    expect(redFilter.closest(".jt-check")).toHaveAttribute("data-state", "checked");
     expect(screen.getByText("75")).toBeVisible();
 
     const amountSummary = screen.getByLabelText("Filter amount");
@@ -315,11 +395,10 @@ describe("DataGrid", () => {
 
     const dateSummary = screen.getByLabelText("Filter date");
     await user.click(dateSummary);
-    const dateDetails = dateSummary.closest("details");
-    fireEvent.change(within(dateDetails as HTMLElement).getByLabelText("Start"), {
-      target: { value: "2026-01-01" },
-    });
-    expect(screen.getByText("2026-06-01")).toBeVisible();
+    expect(screen.getByRole("group", { name: "Choose date range" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Today" }));
+    expect(dateSummary).toHaveAttribute("data-active", "true");
+    expect(within(dateSummary).getByText("2")).toBeVisible();
   });
 
   it("sorts client-side through an accessible header button", async () => {
@@ -375,6 +454,29 @@ describe("DataGrid", () => {
     fireEvent.click(defined(checkboxes[2]), { shiftKey: true });
     expect(checkboxes.every((checkbox) => (checkbox as HTMLInputElement).checked)).toBe(true);
     expect(onSelectionChange).toHaveBeenLastCalledWith({ "1": true, "2": true, "3": true }, rows);
+  });
+
+  it("uses the entire row selection cell as the click target without firing the row", async () => {
+    const user = userEvent.setup();
+    const onRowClick = vi.fn();
+    render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableRowSelection
+        getRowId={(row) => row.id}
+        onRowClick={onRowClick}
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+    const rowCheckbox = screen.getByRole("checkbox", { name: "Select row 1" });
+    const selectionCell = rowCheckbox.closest<HTMLElement>(".jt-grid__selection-cell");
+
+    await user.click(defined(selectionCell));
+
+    expect(rowCheckbox).toBeChecked();
+    expect(onRowClick).not.toHaveBeenCalled();
   });
 
   it("disables selection through a row predicate", () => {
@@ -483,7 +585,8 @@ describe("DataGrid", () => {
       />,
     );
     const selectAll = screen.getByRole("checkbox", { name: "Select all loaded rows" });
-    fireEvent.click(selectAll);
+    const selectAllCell = selectAll.closest<HTMLElement>(".jt-grid__selection-cell");
+    fireEvent.click(defined(selectAllCell));
     expect(
       screen
         .getAllByRole("checkbox", { name: /Select row/ })

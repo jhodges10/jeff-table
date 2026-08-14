@@ -105,9 +105,20 @@ export type DataGridClassNameSlot =
 
 export type DataGridClassNames = Partial<Record<DataGridClassNameSlot, string>>;
 
-export interface DataGridSections<TData> {
+export interface DataGridSectionSelectionContext<TData extends RowData> {
+  checked: boolean;
+  disabled: boolean;
+  indeterminate: boolean;
+  key: string;
+  rows: readonly TData[];
+  selectedRows: readonly TData[];
+  toggle: (selected?: boolean) => void;
+}
+
+export interface DataGridSections<TData extends RowData> {
   getKey: (row: TData) => string;
   renderHeader: (context: { key: string; rows: readonly TData[] }) => ReactNode;
+  renderSelection?: (context: DataGridSectionSelectionContext<TData>) => ReactNode;
   headerHeight?: number;
 }
 

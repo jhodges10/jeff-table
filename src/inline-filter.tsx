@@ -1,6 +1,8 @@
 import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
+import { DateRangePickerPanel } from "./date-range-picker";
 import type { DataGridColumn, DataGridInstance } from "./features";
+import { IndeterminateCheckbox } from "./indeterminate-checkbox";
 import type { DataGridColumnFilterConfig, DataGridFilterOption } from "./types";
 
 type FilterValue = string | string[] | undefined;
@@ -150,6 +152,7 @@ function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEdi
           filteredOptions.map((option) => {
             const checked = selected.includes(option.value);
             return isMulti ? (
+              // biome-ignore lint/a11y/noLabelWithoutControl: IndeterminateCheckbox renders the nested checkbox input
               <label
                 className="jt-filter-editor__option"
                 data-selected={checked || undefined}
@@ -158,7 +161,7 @@ function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEdi
                 <span>
                   <OptionContent config={config} option={option} />
                 </span>
-                <input checked={checked} onChange={() => select(option.value)} type="checkbox" />
+                <IndeterminateCheckbox checked={checked} onChange={() => select(option.value)} />
               </label>
             ) : (
               <button
@@ -293,8 +296,7 @@ function BooleanFilterEditor({ onChange, onDone, value }: ColumnFilterEditorProp
 
 function RangeFilterEditor({ config, onChange, value }: ColumnFilterEditorProps) {
   const values = Array.isArray(value) ? value : ["", ""];
-  const isDate = config.type === "date-range";
-  const labels = isDate ? ["Start", "End"] : ["Minimum", "Maximum"];
+  const labels = ["Minimum", "Maximum"];
   const update = (index: number, nextValue: string) => {
     const next = [values[0] ?? "", values[1] ?? ""];
     next[index] = nextValue;
@@ -312,28 +314,39 @@ function RangeFilterEditor({ config, onChange, value }: ColumnFilterEditorProps)
               min={config.min}
               onChange={(event) => update(index, event.target.value)}
               step={config.step}
-              type={isDate ? "date" : "number"}
+              type="number"
               value={values[index] ?? ""}
             />
           </label>
         ))}
       </div>
       {values.some(Boolean) ? (
-        <FilterClearButton
-          label={isDate ? "Clear dates" : "Clear range"}
-          onClick={() => onChange(undefined)}
-        />
+        <FilterClearButton label="Clear range" onClick={() => onChange(undefined)} />
       ) : null}
     </div>
+  );
+}
+
+function DateRangeFilterEditor({ onChange, onDone, value }: ColumnFilterEditorProps) {
+  const values = Array.isArray(value) ? value : [value ?? "", ""];
+  return (
+    <DateRangePickerPanel
+      {...(values[0] ? { from: values[0] } : {})}
+      onChange={(next) =>
+        onChange(next.from || next.to ? [next.from ?? "", next.to ?? ""] : undefined)
+      }
+      {...(onDone ? { onCommit: onDone } : {})}
+      testId="date-filter"
+      {...(values[1] ? { to: values[1] } : {})}
+    />
   );
 }
 
 function ColumnFilterEditor(props: ColumnFilterEditorProps) {
   if (props.config.type === "text") return <TextFilterEditor {...props} />;
   if (props.config.type === "boolean") return <BooleanFilterEditor {...props} />;
-  if (props.config.type === "date-range" || props.config.type === "number-range") {
-    return <RangeFilterEditor {...props} />;
-  }
+  if (props.config.type === "date-range") return <DateRangeFilterEditor {...props} />;
+  if (props.config.type === "number-range") return <RangeFilterEditor {...props} />;
   return <SelectFilterEditor {...props} />;
 }
 
@@ -368,7 +381,9 @@ export function InlineFilter<TData extends RowData>({ column, config }: InlineFi
         {activeCount > 0 ? <span className="jt-filter-count">{activeCount}</span> : null}
       </summary>
       {open ? (
-        <div className="jt-filter__popover">
+        <div
+          className={`jt-filter__popover${config.type === "date-range" ? " jt-filter__popover--date" : ""}`}
+        >
           <ColumnFilterEditor
             config={config}
             onChange={(nextValue) => column.setFilterValue(nextValue)}
@@ -423,7 +438,9 @@ export function DataGridFiltersMenu<TData extends RowData>({
         {activeCount > 0 ? <span className="jt-filter-count">{activeCount}</span> : null}
       </summary>
       {open ? (
-        <div className="jt-filter__popover jt-filters-menu__popover">
+        <div
+          className={`jt-filter__popover jt-filters-menu__popover${activeConfig?.type === "date-range" ? " jt-filter__popover--date" : ""}`}
+        >
           {activeColumn && activeConfig ? (
             <>
               <button

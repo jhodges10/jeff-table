@@ -125,11 +125,19 @@ Sections are presentation-only. Filtering and sorting run first; section order f
         <span>{rows.length} loaded</span>
       </div>
     ),
+    renderSelection: ({ checked, indeterminate, key, toggle }) => (
+      <IndeterminateCheckbox
+        aria-label={`Select ${key} section`}
+        checked={checked}
+        indeterminate={indeterminate}
+        onChange={(event) => toggle(event.currentTarget.checked)}
+      />
+    ),
   }}
 />
 ```
 
-Section headers are part of the virtual item model. When a server result is partially loaded, the grid renders known sections followed by unloaded row placeholders because section keys for records not yet fetched are unknowable.
+Section headers are part of the virtual item model. With row selection enabled, they receive a default animated select-all checkbox; `renderSelection` can replace it while retaining the section's checked, indeterminate, disabled, and toggle behavior. When a server result is partially loaded, the grid renders known sections followed by unloaded row placeholders because section keys for records not yet fetched are unknowable.
 
 ## Header, column-header, and footer slots
 
@@ -187,6 +195,17 @@ Supported column filter types:
 - `boolean`
 - `number-range`
 - `date-range`
+
+Date ranges use the exported `DateRangePickerPanel`: preset ranges commit immediately, while calendar selections remain drafts until Apply. The standalone `DateRangePicker` adds a formatted trigger, popover dismissal, and clear action for use outside a grid.
+
+```tsx
+<DateRangePicker
+  from={range.from}
+  to={range.to}
+  onChange={setRange}
+  placeholder="Order date"
+/>
+```
 
 All filter UIs use TanStack's `columnFilters` state. Sorting, column filters, and global filtering can each be controlled or uncontrolled. Set `manualSorting` or `manualFiltering` when a server owns the results; the UI continues to report state through `onSortingChange`, `onColumnFiltersChange`, and `onGlobalFilterChange`.
 

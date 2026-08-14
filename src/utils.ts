@@ -3,7 +3,12 @@ import type { DataGridColumnDef, DataGridRow } from "./features";
 import type { DataGridSections } from "./types";
 
 export type DataGridDisplayItem<TData extends RowData> =
-  | { key: string; kind: "section"; rows: readonly TData[] }
+  | {
+      key: string;
+      kind: "section";
+      rowModels: readonly DataGridRow<TData>[];
+      rows: readonly TData[];
+    }
   | { kind: "row"; row: DataGridRow<TData> };
 
 export function cx(...values: Array<string | false | null | undefined>): string {
@@ -118,6 +123,7 @@ export function buildSectionItems<TData extends RowData>(
     items.push({
       key,
       kind: "section",
+      rowModels: groupRows,
       rows: groupRows.map((row) => row.original),
     });
     for (const row of groupRows) items.push({ kind: "row", row });

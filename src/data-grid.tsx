@@ -50,6 +50,19 @@ const DENSITY_ROW_HEIGHT = {
 const KEYBOARD_SCROLL_PROPS: React.HTMLAttributes<HTMLDivElement> = { tabIndex: 0 };
 
 const PIXEL_WIDTH_PATTERN = /^(\d+(?:\.\d+)?)px$/;
+const INTERACTIVE_SELECTION_TARGET = "a, button, input, label, select, textarea";
+
+function handleSelectionCellClick(
+  event: React.MouseEvent<HTMLDivElement>,
+  disabled: boolean,
+  toggle: () => void,
+) {
+  event.stopPropagation();
+  if (disabled) return;
+  const target = event.target;
+  if (target instanceof Element && target.closest(INTERACTIVE_SELECTION_TARGET)) return;
+  toggle();
+}
 
 function numericSort<TData extends RowData>(
   left: DataGridRow<TData>,
@@ -175,6 +188,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const rowHeight = rowHeightProp ?? DENSITY_ROW_HEIGHT[density];
   const scrollReference = React.useRef<HTMLDivElement>(null);
   const headerCanvasReference = React.useRef<HTMLDivElement>(null);
+  const rowsCanvasReference = React.useRef<HTMLDivElement>(null);
   const columnIds = React.useMemo(
     () => columns.map(getColumnDefinitionId).filter((id): id is string => Boolean(id)),
     [columns],
@@ -394,6 +408,29 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     slots.headerEnd !== undefined;
   const bodyHeight = virtualize ? rowVirtualizer.getTotalSize() : undefined;
   const gridLabel = props["aria-label"] ?? "Data grid";
+  const synchronizeHeaderCanvas = React.useCallback(() => {
+    const headerCanvas = headerCanvasReference.current;
+    const rowsCanvas = rowsCanvasReference.current;
+    const rowsViewport = scrollReference.current;
+    if (!headerCanvas || !rowsCanvas || !rowsViewport) return;
+
+    const rowsCanvasWidth = rowsCanvas.getBoundingClientRect().width;
+    if (rowsCanvasWidth > 0) headerCanvas.style.width = `${rowsCanvasWidth}px`;
+    headerCanvas.style.transform = `translate3d(${-rowsViewport.scrollLeft}px, 0, 0)`;
+  }, []);
+
+  React.useLayoutEffect(() => {
+    synchronizeHeaderCanvas();
+    const rowsCanvas = rowsCanvasReference.current;
+    const rowsViewport = scrollReference.current;
+    if (!rowsCanvas || !rowsViewport || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(synchronizeHeaderCanvas);
+    observer.observe(rowsCanvas);
+    observer.observe(rowsViewport);
+    return () => observer.disconnect();
+  }, [synchronizeHeaderCanvas]);
+
   const handleRowsScroll = React.useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const headerCanvas = headerCanvasReference.current;
     if (!headerCanvas) return;
@@ -468,7 +505,20 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                   style={{ gridTemplateColumns: gridTemplate }}
                 >
                   {props.enableRowSelection ? (
-                    <div className="jt-grid__selection-cell" role="columnheader">
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: the nested checkbox remains the keyboard target; this expands only its pointer target
+                    <div
+                      className="jt-grid__selection-cell"
+                      data-selection-target={groupIndex === headerGroups.length - 1 || undefined}
+                      onClick={
+                        groupIndex === headerGroups.length - 1
+                          ? (event) =>
+                              handleSelectionCellClick(event, false, () =>
+                                table.toggleAllRowsSelected(!table.getIsAllRowsSelected()),
+                              )
+                          : undefined
+                      }
+                      role="columnheader"
+                    >
                       {groupIndex === headerGroups.length - 1 ? (
                         <IndeterminateCheckbox
                           aria-label="Select all loaded rows"
@@ -606,7 +656,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
           ref={scrollReference}
           role="region"
         >
-          <div className="jt-grid__canvas jt-grid__rows-canvas">
+          <div className="jt-grid__canvas jt-grid__rows-canvas" ref={rowsCanvasReference}>
             <div
               className={cx("jt-grid__body", classNames.body)}
               data-slot="body"
@@ -644,6 +694,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                       : {
                           height: `${virtualItem.size}px`,
                           position: "absolute",
+                          top: 0,
                           transform: `translateY(${virtualItem.start}px)`,
                         }
                     : {
@@ -651,17 +702,75 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                       };
 
                   if (item?.kind === "section") {
+                    const selectableRows: (typeof item.rowModels)[number][] = [];
+                    const selectedRows: (typeof item.rowModels)[number][] = [];
+                    for (const row of item.rowModels) {
+                      if (!row.getCanSelect()) continue;
+                      selectableRows.push(row);
+                      if (row.getIsSelected()) selectedRows.push(row);
+                    }
+                    const checked =
+                      selectableRows.length > 0 && selectedRows.length === selectableRows.length;
+                    const indeterminate = selectedRows.length > 0 && !checked;
+                    const toggle = (selected = !checked) => {
+                      table.setRowSelection((current) => {
+                        const next = { ...current };
+                        for (const row of selectableRows) {
+                          if (selected) next[row.id] = true;
+                          else delete next[row.id];
+                        }
+                        return next;
+                      });
+                    };
+                    const selectionContext = {
+                      checked,
+                      disabled: selectableRows.length === 0,
+                      indeterminate,
+                      key: item.key,
+                      rows: item.rows,
+                      selectedRows: selectedRows.map((row) => row.original),
+                      toggle,
+                    };
                     return (
                       <div
                         className={cx("jt-grid__section", classNames.sectionHeader)}
                         data-section-key={item.key}
+                        data-selection={props.enableRowSelection || undefined}
                         data-slot="section-header"
                         data-sticky={isStickySection || undefined}
                         key={virtualItem.key}
                         role="row"
-                        style={virtualStyle}
+                        style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
                       >
-                        <div role="gridcell">
+                        {props.enableRowSelection ? (
+                          // biome-ignore lint/a11y/useKeyWithClickEvents: the nested control remains the single keyboard target; this only expands its pointer target
+                          <div
+                            className="jt-grid__selection-cell jt-grid__section-selection"
+                            data-disabled={selectionContext.disabled || undefined}
+                            data-selection-target="true"
+                            onClick={(event) =>
+                              handleSelectionCellClick(event, selectionContext.disabled, toggle)
+                            }
+                            role="gridcell"
+                          >
+                            {sections?.renderSelection ? (
+                              sections.renderSelection(selectionContext)
+                            ) : (
+                              <IndeterminateCheckbox
+                                aria-label={`Select all rows in ${item.key}`}
+                                checked={checked}
+                                disabled={selectionContext.disabled}
+                                indeterminate={indeterminate}
+                                onChange={(event) => toggle(event.currentTarget.checked)}
+                              />
+                            )}
+                          </div>
+                        ) : null}
+                        <div
+                          className="jt-grid__section-content"
+                          role="gridcell"
+                          style={{ gridColumn: `span ${Math.max(1, visibleColumns.length)}` }}
+                        >
                           {sections?.renderHeader({ key: item.key, rows: item.rows })}
                         </div>
                       </div>
@@ -751,7 +860,16 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                       tabIndex={props.onRowClick ? 0 : undefined}
                     >
                       {props.enableRowSelection ? (
-                        <div className="jt-grid__selection-cell" role="gridcell">
+                        // biome-ignore lint/a11y/useKeyWithClickEvents: the nested checkbox remains the keyboard target; this expands only its pointer target
+                        <div
+                          className="jt-grid__selection-cell"
+                          data-disabled={!canSelect || undefined}
+                          data-selection-target="true"
+                          onClick={(event) =>
+                            handleSelectionCellClick(event, !canSelect, () => row.toggleSelected())
+                          }
+                          role="gridcell"
+                        >
                           <IndeterminateCheckbox
                             aria-label={`Select row ${row.id}`}
                             checked={row.getIsSelected()}

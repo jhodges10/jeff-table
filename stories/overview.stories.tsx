@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
-import { DataGrid, type DataGridProps } from "../src";
+import { DataGrid, type DataGridProps, IndeterminateCheckbox } from "../src";
 import { makePeople, type Person, people, personColumns } from "./fixtures";
 
 function PersonGrid(props: DataGridProps<Person>) {
@@ -66,6 +66,15 @@ export const KitchenSink: Story = {
           <strong>{key}</strong>
           <span>{rows.length} loaded</span>
         </div>
+      ),
+      renderSelection: ({ checked, disabled, indeterminate, key, toggle }) => (
+        <IndeterminateCheckbox
+          aria-label={`Select ${key} section`}
+          checked={checked}
+          disabled={disabled}
+          indeterminate={indeterminate}
+          onChange={(event) => toggle(event.currentTarget.checked)}
+        />
       ),
     },
     slots: {

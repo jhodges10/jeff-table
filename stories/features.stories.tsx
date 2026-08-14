@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, userEvent, waitFor, within } from "storybook/test";
-import { DataGrid, type DataGridProps } from "../src";
+import { DataGrid, type DataGridProps, IndeterminateCheckbox } from "../src";
 import { defined } from "../src/test/defined";
 import { type Person, people, personColumns } from "./fixtures";
 
@@ -24,6 +24,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Sections: Story = {
   args: {
+    enableRowSelection: true,
     sections: {
       getKey: (row) => row.department,
       headerHeight: 44,
@@ -32,6 +33,15 @@ export const Sections: Story = {
           <strong>{key}</strong>
           <span>{rows.length} people in this loaded section</span>
         </div>
+      ),
+      renderSelection: ({ checked, disabled, indeterminate, key, toggle }) => (
+        <IndeterminateCheckbox
+          aria-label={`Select ${key} section`}
+          checked={checked}
+          disabled={disabled}
+          indeterminate={indeterminate}
+          onChange={(event) => toggle(event.currentTarget.checked)}
+        />
       ),
     },
   },
@@ -43,6 +53,12 @@ export const Sections: Story = {
       .getByText("Engineering")
       .closest<HTMLElement>('[data-slot="section-header"]');
     await expect(engineering).toHaveAttribute("data-sticky", "true");
+    const engineeringSelection = canvas.getByRole("checkbox", {
+      name: "Select Engineering section",
+    });
+    await userEvent.click(engineeringSelection);
+    await expect(engineeringSelection).toBeChecked();
+    await expect(canvas.getByText(`${engineeringCount} selected`)).toBeVisible();
 
     viewport.scrollTop = (engineeringCount + 1) * 44 + 1;
     fireEvent.scroll(viewport);

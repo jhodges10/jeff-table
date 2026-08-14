@@ -78,6 +78,15 @@ body {
   display: grid;
   gap: 1.5rem;
 }
+.story-date-range-demo {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+.story-date-range-demo > code {
+  color: #475569;
+  font-size: 0.75rem;
+}
 .story-density-stack h3 {
   margin: 0 0 0.5rem;
   font-size: 0.875rem;
