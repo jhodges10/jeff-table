@@ -17,6 +17,9 @@ interface ColumnFilterEditorProps {
 interface InlineFilterProps<TData extends RowData> {
   column: DataGridColumn<TData>;
   config: DataGridColumnFilterConfig;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  popoverGroup: string;
 }
 
 function FilterIcon() {
@@ -354,23 +357,25 @@ function stopHeaderActivation(event: React.SyntheticEvent) {
   event.stopPropagation();
 }
 
-export function InlineFilter<TData extends RowData>({ column, config }: InlineFilterProps<TData>) {
-  const detailsReference = React.useRef<HTMLDetailsElement>(null);
-  const [open, setOpen] = React.useState(false);
+export function InlineFilter<TData extends RowData>({
+  column,
+  config,
+  onOpenChange,
+  open,
+  popoverGroup,
+}: InlineFilterProps<TData>) {
   const value = normalizeFilterValue(column.getFilterValue());
   const activeCount = getActiveCount(value, config);
-  const close = () => {
-    if (detailsReference.current) detailsReference.current.open = false;
-    setOpen(false);
-  };
+  const close = () => onOpenChange(false);
 
   return (
     <details
       className="jt-column-filter"
       onClick={stopHeaderActivation}
       onKeyDown={stopHeaderActivation}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-      ref={detailsReference}
+      name={popoverGroup}
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+      open={open}
     >
       <summary
         aria-label={`Filter ${column.id}`}
@@ -401,12 +406,16 @@ function getColumnLabel<TData extends RowData>(column: DataGridColumn<TData>): s
 }
 
 export function DataGridFiltersMenu<TData extends RowData>({
+  onOpenChange,
+  open,
+  popoverGroup,
   table,
 }: {
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  popoverGroup: string;
   table: DataGridInstance<TData>;
 }) {
-  const detailsReference = React.useRef<HTMLDetailsElement>(null);
-  const [open, setOpen] = React.useState(false);
   const [activeColumnId, setActiveColumnId] = React.useState<string>();
   const columns = table
     .getAllLeafColumns()
@@ -427,10 +436,11 @@ export function DataGridFiltersMenu<TData extends RowData>({
     <details
       className="jt-filters-menu"
       onToggle={(event) => {
-        setOpen(event.currentTarget.open);
+        onOpenChange(event.currentTarget.open);
         if (!event.currentTarget.open) setActiveColumnId(undefined);
       }}
-      ref={detailsReference}
+      name={popoverGroup}
+      open={open}
     >
       <summary aria-label="Column filters" className="jt-filters-menu__trigger">
         <FilterIcon />

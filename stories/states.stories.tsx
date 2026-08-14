@@ -1,9 +1,38 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import * as React from "react";
 import { DataGrid, type DataGridProps } from "../src";
 import { type Person, people, personColumns } from "./fixtures";
 
 function PersonGrid(props: DataGridProps<Person>) {
   return <DataGrid {...props} />;
+}
+
+function BriefLoadingCycle(props: DataGridProps<Person>) {
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 250);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return <DataGrid {...props} isLoadingMore={loading} />;
+}
+
+function BriefLoadingGrid(props: DataGridProps<Person>) {
+  const [run, setRun] = React.useState(0);
+
+  return (
+    <div className="story-loading-demo">
+      <button
+        className="story-toolbar-button"
+        onClick={() => setRun((value) => value + 1)}
+        type="button"
+      >
+        Replay 250ms load
+      </button>
+      <BriefLoadingCycle key={run} {...props} />
+    </div>
+  );
 }
 
 const meta = {
@@ -58,6 +87,13 @@ export const CustomLoadingIndicator: Story = {
     },
     totalCount: 300,
   },
+};
+
+export const MinimumSpinnerDuration: Story = {
+  args: {
+    totalCount: 300,
+  },
+  render: (args) => <BriefLoadingGrid {...args} />,
 };
 
 export const Empty: Story = {

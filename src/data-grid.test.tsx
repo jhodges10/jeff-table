@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DataGrid } from "./data-grid";
@@ -286,7 +286,39 @@ describe("DataGrid", () => {
       <DataGrid columns={columns} data={rows} isLoadingMore totalCount={100} virtualize={false} />,
     );
     const count = screen.getByText(/3 of 100 records/);
-    expect(count.nextElementSibling).toHaveAttribute("role", "status");
+    expect(count.nextElementSibling).toHaveClass("jt-loading-indicator");
+    expect(within(count.nextElementSibling as HTMLElement).getByRole("status")).toBeVisible();
+  });
+
+  it("keeps the loading indicator visible for 1.5 seconds before fading it out", async () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(
+        <DataGrid
+          columns={columns}
+          data={rows}
+          isLoadingMore
+          totalCount={100}
+          virtualize={false}
+        />,
+      );
+      const status = screen.getByRole("status", { name: "Loading" });
+      const indicator = status.closest(".jt-loading-indicator");
+      expect(indicator).toHaveAttribute("data-state", "visible");
+
+      rerender(<DataGrid columns={columns} data={rows} totalCount={100} virtualize={false} />);
+      await act(() => vi.advanceTimersByTimeAsync(1_499));
+      expect(indicator).toHaveAttribute("data-state", "visible");
+
+      await act(() => vi.advanceTimersByTimeAsync(1));
+      expect(indicator).toHaveAttribute("data-state", "exiting");
+      expect(status).toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(200));
+      expect(status).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("client-filters from the global search", async () => {
@@ -434,6 +466,43 @@ describe("DataGrid", () => {
     await user.click(screen.getByLabelText("Email"));
     expect(screen.queryByRole("columnheader", { name: /Email/ })).not.toBeInTheDocument();
     expect(screen.queryByText("ada@example.com")).not.toBeInTheDocument();
+  });
+
+  it("keeps only one grid popover open at a time", async () => {
+    const user = userEvent.setup();
+    render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnFiltering
+        enableColumnVisibility
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+
+    const inlineFilter = screen.getByLabelText("Filter name").closest("details");
+    const filtersMenu = screen.getByLabelText("Column filters").closest("details");
+    const columnsMenu = screen.getByLabelText("Show or hide columns").closest("details");
+
+    expect(inlineFilter).not.toBeNull();
+    expect(filtersMenu).not.toBeNull();
+    expect(columnsMenu).not.toBeNull();
+    expect(inlineFilter).toHaveAttribute("name", filtersMenu?.getAttribute("name"));
+    expect(columnsMenu).toHaveAttribute("name", filtersMenu?.getAttribute("name"));
+
+    await user.click(screen.getByLabelText("Filter name"));
+    expect(inlineFilter).toHaveAttribute("open");
+
+    await user.click(screen.getByLabelText("Show or hide columns"));
+    expect(columnsMenu).toHaveAttribute("open");
+    expect(inlineFilter).not.toHaveAttribute("open");
+    expect(screen.getByRole("group", { name: "Columns" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: "Email" })).toHaveClass("jt-check__input");
+
+    await user.click(screen.getByLabelText("Column filters"));
+    expect(filtersMenu).toHaveAttribute("open");
+    expect(columnsMenu).not.toHaveAttribute("open");
   });
 
   it("requires stable IDs for selection and supports v9 shift-range selection", () => {
@@ -614,6 +683,29 @@ describe("DataGrid", () => {
     expect(screen.getByRole("button", { name: "Saved view" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Export" })).toBeVisible();
     expect(screen.getByText("Loaded 3")).toBeVisible();
+  });
+
+  it("leaves theme defaults to CSS and only applies explicit theme overrides inline", () => {
+    const { rerender } = render(
+      <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
+    );
+    const grid = screen.getByTestId("data-grid");
+
+    expect(grid.style.getPropertyValue("--jt-accent")).toBe("");
+    expect(grid.style.getPropertyValue("--jt-background")).toBe("");
+
+    rerender(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        theme={{ accent: "oklch(0.6 0.2 250)" }}
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+
+    expect(grid.style.getPropertyValue("--jt-accent")).toBe("oklch(0.6 0.2 250)");
+    expect(grid.style.getPropertyValue("--jt-background")).toBe("");
   });
 
   it("loads more when virtualization approaches the loaded boundary", async () => {

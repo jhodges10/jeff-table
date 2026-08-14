@@ -25,27 +25,14 @@ import {
   getColumnDefinitionId,
 } from "./utils";
 
-const DEFAULT_THEME: DataGridTheme = {
-  accent: "#2563eb",
-  accentForeground: "#ffffff",
-  background: "#ffffff",
-  border: "#e2e8f0",
-  danger: "#dc2626",
-  foreground: "#0f172a",
-  headerBackground: "#f8fafc",
-  hover: "#f8fafc",
-  muted: "#f1f5f9",
-  mutedForeground: "#64748b",
-  radius: "0.625rem",
-  selected: "#eff6ff",
-  shadow: "0 1px 2px rgb(15 23 42 / 0.06)",
-};
-
 const DENSITY_ROW_HEIGHT = {
   compact: 36,
   comfortable: 44,
   spacious: 52,
 } as const;
+
+const LOADING_INDICATOR_MINIMUM_MS = 1_500;
+const LOADING_INDICATOR_FADE_MS = 200;
 
 const KEYBOARD_SCROLL_PROPS: React.HTMLAttributes<HTMLDivElement> = { tabIndex: 0 };
 
@@ -130,23 +117,63 @@ function createThemeStyle(
   theme: Partial<DataGridTheme> | undefined,
   style: React.CSSProperties | undefined,
 ): React.CSSProperties {
-  const resolved = { ...DEFAULT_THEME, ...theme };
   return {
     ...style,
-    "--jt-accent": resolved.accent,
-    "--jt-accent-foreground": resolved.accentForeground,
-    "--jt-background": resolved.background,
-    "--jt-border": resolved.border,
-    "--jt-danger": resolved.danger,
-    "--jt-foreground": resolved.foreground,
-    "--jt-header-background": resolved.headerBackground,
-    "--jt-hover": resolved.hover,
-    "--jt-muted": resolved.muted,
-    "--jt-muted-foreground": resolved.mutedForeground,
-    "--jt-radius": resolved.radius,
-    "--jt-selected": resolved.selected,
-    "--jt-shadow": resolved.shadow,
+    ...(theme?.accent === undefined ? {} : { "--jt-accent": theme.accent }),
+    ...(theme?.accentForeground === undefined
+      ? {}
+      : { "--jt-accent-foreground": theme.accentForeground }),
+    ...(theme?.background === undefined ? {} : { "--jt-background": theme.background }),
+    ...(theme?.border === undefined ? {} : { "--jt-border": theme.border }),
+    ...(theme?.danger === undefined ? {} : { "--jt-danger": theme.danger }),
+    ...(theme?.foreground === undefined ? {} : { "--jt-foreground": theme.foreground }),
+    ...(theme?.headerBackground === undefined
+      ? {}
+      : { "--jt-header-background": theme.headerBackground }),
+    ...(theme?.hover === undefined ? {} : { "--jt-hover": theme.hover }),
+    ...(theme?.muted === undefined ? {} : { "--jt-muted": theme.muted }),
+    ...(theme?.mutedForeground === undefined
+      ? {}
+      : { "--jt-muted-foreground": theme.mutedForeground }),
+    ...(theme?.radius === undefined ? {} : { "--jt-radius": theme.radius }),
+    ...(theme?.selected === undefined ? {} : { "--jt-selected": theme.selected }),
+    ...(theme?.shadow === undefined ? {} : { "--jt-shadow": theme.shadow }),
   } as React.CSSProperties;
+}
+
+function LoadingIndicator({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const [phase, setPhase] = React.useState<"exiting" | "hidden" | "visible">(
+    active ? "visible" : "hidden",
+  );
+  const shownAtReference = React.useRef(active ? Date.now() : 0);
+  const wasActiveReference = React.useRef(active);
+
+  React.useEffect(() => {
+    let exitTimer: ReturnType<typeof setTimeout> | undefined;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+    if (active) {
+      if (!wasActiveReference.current) shownAtReference.current = Date.now();
+      setPhase("visible");
+    } else if (wasActiveReference.current) {
+      const elapsed = Date.now() - shownAtReference.current;
+      const remaining = Math.max(0, LOADING_INDICATOR_MINIMUM_MS - elapsed);
+      exitTimer = setTimeout(() => setPhase("exiting"), remaining);
+      hideTimer = setTimeout(() => setPhase("hidden"), remaining + LOADING_INDICATOR_FADE_MS);
+    }
+
+    wasActiveReference.current = active;
+    return () => {
+      if (exitTimer !== undefined) clearTimeout(exitTimer);
+      if (hideTimer !== undefined) clearTimeout(hideTimer);
+    };
+  }, [active]);
+
+  return phase === "hidden" ? null : (
+    <span className="jt-loading-indicator" data-state={phase}>
+      {children}
+    </span>
+  );
 }
 
 /**
@@ -186,6 +213,8 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     virtualize = true,
   } = props;
   const rowHeight = rowHeightProp ?? DENSITY_ROW_HEIGHT[density];
+  const popoverGroup = React.useId();
+  const [openPopover, setOpenPopover] = React.useState<string>();
   const scrollReference = React.useRef<HTMLDivElement>(null);
   const headerCanvasReference = React.useRef<HTMLDivElement>(null);
   const rowsCanvasReference = React.useRef<HTMLDivElement>(null);
@@ -436,6 +465,9 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     if (!headerCanvas) return;
     headerCanvas.style.transform = `translate3d(${-event.currentTarget.scrollLeft}px, 0, 0)`;
   }, []);
+  const handlePopoverChange = React.useCallback((id: string, open: boolean) => {
+    setOpenPopover((current) => (open ? id : current === id ? undefined : current));
+  }, []);
 
   return (
     <div
@@ -460,7 +492,14 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                 />
               </label>
             ) : null}
-            {enableColumnFiltering ? <DataGridFiltersMenu table={table} /> : null}
+            {enableColumnFiltering ? (
+              <DataGridFiltersMenu
+                onOpenChange={(open) => handlePopoverChange("filters-menu", open)}
+                open={openPopover === "filters-menu"}
+                popoverGroup={popoverGroup}
+                table={table}
+              />
+            ) : null}
             {renderSlot(slots.headerStart, context)}
           </div>
           <div className={cx("jt-grid__header-end", classNames.headerEnd)}>
@@ -487,6 +526,9 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
               {...(classNames.columnMenu ? { className: classNames.columnMenu } : {})}
               columnOrder={gridState.columnOrder}
               columnVisibility={gridState.columnVisibility}
+              onOpenChange={(open) => handlePopoverChange("columns-menu", open)}
+              open={openPopover === "columns-menu"}
+              popoverGroup={popoverGroup}
               table={table}
             />
           ) : null}
@@ -606,7 +648,15 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                           ) : null}
                           {enableColumnFiltering && isLeaf && meta?.filter ? (
                             <div className={cx("jt-grid__filter", classNames.filter)}>
-                              <InlineFilter column={header.column} config={meta.filter} />
+                              <InlineFilter
+                                column={header.column}
+                                config={meta.filter}
+                                onOpenChange={(open) =>
+                                  handlePopoverChange(`filter-${header.column.id}`, open)
+                                }
+                                open={openPopover === `filter-${header.column.id}`}
+                                popoverGroup={popoverGroup}
+                              />
                             </div>
                           ) : null}
                         </div>
@@ -915,7 +965,9 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
               {data.length < totalCount ? `${data.length.toLocaleString()} of ` : ""}
               {totalCount.toLocaleString()} {totalCount === 1 ? "record" : "records"}
             </span>
-            {isLoading || isLoadingMore ? loadingIndicator : null}
+            <LoadingIndicator active={isLoading || isLoadingMore}>
+              {loadingIndicator}
+            </LoadingIndicator>
             {selectedRows.length > 0 ? (
               <span className="jt-grid__selection-count">{selectedRows.length} selected</span>
             ) : null}

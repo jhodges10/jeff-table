@@ -14,6 +14,52 @@ The package currently targets React 19 and TanStack Table v9. `totalCount` is re
 
 ## Install
 
+### shadcn registry
+
+Install the complete source-owned component into your configured shadcn `ui` directory:
+
+```sh
+bunx shadcn@latest add https://jeff-table.vercel.app/r/data-grid.json
+```
+
+Or register the hosted catalog in your `components.json`:
+
+```json
+{
+  "registries": {
+    "jeff-table": {
+      "url": "https://jeff-table.vercel.app/r/{name}.json"
+    }
+  }
+}
+```
+
+Then install by namespace:
+
+```sh
+bunx shadcn@latest add @jeff-table/data-grid
+```
+
+You can also install directly from the public GitHub source registry without waiting for a hosted
+registry build:
+
+```sh
+bunx shadcn@latest add jhodges10/jeff-table/data-grid
+```
+
+The registry item installs the required TanStack and date-picker dependencies, then writes the
+component source to `@ui/jeff-table`. Import it through the generated source entry point:
+
+```tsx
+import { DataGrid, type DataGridColumnDef } from "@/components/ui/jeff-table";
+```
+
+Its stylesheet maps the DataGrid theme to shadcn's `background`, `foreground`, `primary`, `muted`,
+`accent`, `border`, `destructive`, and `radius` variables, while retaining standalone fallbacks and
+the existing typed `theme` overrides.
+
+### Package
+
 ```sh
 bun add @jhodges/jeff-table
 ```
@@ -285,6 +331,8 @@ bun run check
 bun run typecheck
 bun run test
 bun run test:coverage
+bun run registry:validate
+bun run registry:build
 bun run storybook
 bun run build:storybook
 bun run build

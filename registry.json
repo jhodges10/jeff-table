@@ -1,0 +1,103 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "jeff-table",
+  "homepage": "https://jeff-table.vercel.app",
+  "items": [
+    {
+      "name": "data-grid",
+      "type": "registry:block",
+      "title": "Jeff Table DataGrid",
+      "description": "A strongly typed, virtualized, themeable DataGrid with column controls, filtering, sections, selection, loading states, and a date-range picker.",
+      "author": "Jeff Hodges",
+      "categories": ["data-display", "dashboard", "table"],
+      "dependencies": [
+        "@tanstack/react-table@^9.0.0",
+        "@tanstack/react-virtual@^3.13.24",
+        "date-fns@^4.1.0",
+        "react-day-picker@^9.13.2"
+      ],
+      "files": [
+        {
+          "path": "registry/data-grid/index.ts",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/index.ts"
+        },
+        {
+          "path": "src/data-grid.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/data-grid.tsx"
+        },
+        {
+          "path": "src/column-visibility-menu.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/column-visibility-menu.tsx"
+        },
+        {
+          "path": "src/date-range-picker.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/date-range-picker.tsx"
+        },
+        {
+          "path": "src/icons.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/icons.tsx"
+        },
+        {
+          "path": "src/indeterminate-checkbox.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/indeterminate-checkbox.tsx"
+        },
+        {
+          "path": "src/inline-filter.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/inline-filter.tsx"
+        },
+        {
+          "path": "src/features.ts",
+          "type": "registry:lib",
+          "target": "@ui/jeff-table/features.ts"
+        },
+        {
+          "path": "src/filtering.ts",
+          "type": "registry:lib",
+          "target": "@ui/jeff-table/filtering.ts"
+        },
+        {
+          "path": "src/preferences.ts",
+          "type": "registry:lib",
+          "target": "@ui/jeff-table/preferences.ts"
+        },
+        {
+          "path": "src/types.ts",
+          "type": "registry:lib",
+          "target": "@ui/jeff-table/types.ts"
+        },
+        {
+          "path": "src/utils.ts",
+          "type": "registry:lib",
+          "target": "@ui/jeff-table/utils.ts"
+        },
+        {
+          "path": "src/use-column-reordering.ts",
+          "type": "registry:hook",
+          "target": "@ui/jeff-table/use-column-reordering.ts"
+        },
+        {
+          "path": "src/use-data-grid-state.ts",
+          "type": "registry:hook",
+          "target": "@ui/jeff-table/use-data-grid-state.ts"
+        },
+        {
+          "path": "src/styles.css",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/styles.css"
+        },
+        {
+          "path": "src/css.d.ts",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/css.d.ts"
+        }
+      ]
+    }
+  ]
+}
