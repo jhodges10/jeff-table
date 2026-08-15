@@ -1,0 +1,78 @@
+import { Canvas, Meta } from "@storybook/addon-docs/blocks";
+import { TokenTable } from "../token-table";
+import * as ThemeStories from "../theming.stories";
+
+<Meta of={ThemeStories} />
+
+# Theming
+
+There are three ways to change how the grid looks, and they compose. Reach for
+the first one that does the job.
+
+1. **Do nothing.** Every token falls back to the shadcn/ui variable of the same
+   meaning — `--background`, `--foreground`, `--primary`, `--muted`, `--border`,
+   `--radius`, `--ring`, `--popover`. In an app that already defines those, the
+   grid arrives already themed.
+2. **Set custom properties.** `--jt-*` on any ancestor, in plain CSS, wins over
+   the built-in defaults.
+3. **Pass `theme`.** The same tokens as an object, written inline on the grid.
+   Useful when the values are computed, or when two grids on one page differ.
+
+```tsx
+<DataGrid theme={{ accent: "#0f766e", radius: "1rem" }} />
+```
+
+```css
+/* identical effect, without the prop */
+.reports-grid {
+  --jt-accent: #0f766e;
+  --jt-radius: 1rem;
+}
+```
+
+Only the keys you pass are written; everything else keeps resolving through the
+stylesheet, so a partial theme stays partial.
+
+## Every token
+
+Both halves of every `light-dark()` pair, measured from the rendered page rather
+than transcribed — so this table cannot drift from the stylesheet.
+
+<TokenTable />
+
+Tokens compose the way you would hope: `headerForeground` defaults to
+`mutedForeground`, `gridLine` to `border`, and `focusRing` to `accent`, so
+setting the general one moves the specific one with it until you override it.
+
+## A brand palette
+
+Five tokens is usually the whole job.
+
+<Canvas of={ThemeStories.BrandTheme} />
+
+## A hand-built dark palette
+
+`theme` can express a complete dark palette, which is what you want when the
+design is a specific dark surface rather than "whatever the page is doing". For
+plain dark mode, don't do this — see
+[Dark Mode](?path=/docs/datagrid-dark-mode--docs), which needs no props at all.
+
+<Canvas of={ThemeStories.DarkTheme} />
+
+## Class slots
+
+`classNames` targets 19 named slots — `root`, `header`, `columnHeader`, `row`,
+`cell`, `sectionHeader`, `footer`, and the rest — so a Tailwind app can style
+the grid with utilities instead of custom properties. The package never requires
+a Tailwind runtime; these stories use plain classes to prove it.
+
+<Canvas of={ThemeStories.TailwindClassOverrides} />
+
+## Density
+
+`density` is a preset over the spacing and type tokens rather than a separate
+code path: `compact` tightens `--jt-cell-padding-block` and `--jt-font-size`,
+`spacious` widens `--jt-cell-padding-inline`. It also sets the default row
+height (36 / 44 / 52px), which `rowHeight` overrides.
+
+<Canvas of={ThemeStories.DensityVariants} />

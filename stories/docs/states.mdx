@@ -1,0 +1,79 @@
+import { Canvas, Meta } from "@storybook/addon-docs/blocks";
+import * as StateStories from "../states.stories";
+
+<Meta of={StateStories} />
+
+# Loading, empty, and error states
+
+A grid spends real time with no data in it. These are the four shapes it takes
+while that is true, and each is a prop rather than something to build around the
+component.
+
+## First load
+
+`isLoading` with an empty `data` array renders skeleton rows. Their widths are
+derived from the row index and column id, not from `Math.random()`, so a
+re-render never reshuffles them and a screenshot test stays stable.
+
+Per column, `meta.skeleton` picks the shape (`bar`, `circle`, `square`), its
+size, and its width range — or `false` to leave a column blank.
+
+<Canvas of={StateStories.InitialSkeletonRows} />
+
+## Refreshing rows that are already on screen
+
+`isLoading` with rows present keeps them visible and shows the footer spinner.
+Replacing loaded data with skeletons is a worse trade: the reader loses their
+place to learn something they can already see in the spinner.
+
+<Canvas of={StateStories.RefreshingLoadedRows} />
+
+## Paging in more rows
+
+`isLoadingMore` marks the rows past the loaded boundary as placeholders while
+the next page arrives. Wire it to `onLoadMore`, which fires once per loaded page
+as the viewport approaches the end:
+
+```tsx
+<DataGrid
+  data={loaded}
+  hasMore={loaded.length < total}
+  isLoadingMore={isFetching}
+  onLoadMore={({ loadedCount }) => fetchPage(loadedCount)}
+  totalCount={total}
+/>
+```
+
+<Canvas of={StateStories.LoadingMoreWithVirtualPlaceholders} />
+
+## The spinner has a floor
+
+A spinner that appears and vanishes inside 100ms reads as a glitch. Once shown,
+the footer indicator stays for 1.5s and then fades, so a fast response looks
+fast instead of broken.
+
+<Canvas of={StateStories.MinimumSpinnerDuration} />
+
+Replace the indicator itself with `slots.loadingIndicator`:
+
+<Canvas of={StateStories.CustomLoadingIndicator} />
+
+## Nothing to show
+
+`emptyMessage` covers the common case. `slots.empty` receives the render
+context, which is what makes an empty state actionable — the most common reason
+a grid is empty is a filter or a saved view the reader forgot about, and
+`resetPreferences` is right there.
+
+<Canvas of={StateStories.Empty} />
+
+<Canvas of={StateStories.CustomEmptySlot} />
+
+## Errors
+
+`error` takes anything. An `Error` renders its message, a string renders as-is,
+and everything else falls back to a generic sentence. The message is announced
+through `role="alert"` inside a proper grid row, so assistive technology hears
+it without the grid's own structure breaking.
+
+<Canvas of={StateStories.ErrorState} />

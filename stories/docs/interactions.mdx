@@ -1,0 +1,81 @@
+import { Canvas, Meta } from "@storybook/addon-docs/blocks";
+import * as InteractionStories from "../interactions.stories";
+
+<Meta of={InteractionStories} />
+
+# Interactions
+
+Behaviour, exercised rather than described. Every story on this page carries a
+play function, and `bun run test:storybook` runs all of them in Chromium — once
+against a light host page and once against a dark one. Open the **Interactions**
+panel under any canvas to step through what ran.
+
+These double as the keyboard contract, which is the part of a grid that is
+easiest to break and hardest to notice.
+
+## Sorting
+
+Column headers are buttons. <kbd>Enter</kbd> or <kbd>Space</kbd> cycles
+ascending → descending → unsorted, and `aria-sort` on the header follows.
+`meta.numericSort` swaps the text comparator for a numeric one, which is what
+you want for currency and anything else formatted for display.
+
+<Canvas of={InteractionStories.SortFromTheKeyboard} />
+
+## Column visibility
+
+The far-right menu is a native `<details>`, so it is reachable and dismissible
+without a focus-trap library. <kbd>Escape</kbd> closes it and returns focus to
+the trigger. The last visible column cannot be hidden.
+
+<Canvas of={InteractionStories.ToggleColumnsFromTheMenu} />
+
+## Dismissing a filter
+
+<kbd>Escape</kbd> closes a filter popover and returns focus to its trigger. The
+filter itself stays applied — dismissing the surface is not the same as clearing
+the value, and the badge on the trigger keeps showing that the column is
+filtered.
+
+<Canvas of={InteractionStories.DismissAFilterPopoverWithEscape} />
+
+## Reordering without a mouse
+
+Drag-and-drop is the discoverable path; <kbd>Alt</kbd> + <kbd>←</kbd> /
+<kbd>→</kbd> on a focused drag handle is the one that works for everyone else.
+Both write the same preferences record.
+
+<Canvas of={InteractionStories.MoveAColumnWithAltArrows} />
+
+## Selection
+
+The header checkbox reports three states. From a partial selection it completes
+the selection rather than clearing it — the same rule the file managers and mail
+clients people already use follow, and the reason clearing takes a second click.
+
+<Canvas of={InteractionStories.SelectEveryLoadedRowThenClear} />
+
+## Paging
+
+`onLoadMore` fires once per loaded page as the viewport approaches the end, not
+once per scroll event. The grid tracks the request against `data.length`, so
+further scrolling while a page is in flight stays quiet.
+
+<Canvas of={InteractionStories.LoadMoreWhenScrollingNearTheEnd} />
+
+## Opening a row
+
+Passing `onRowClick` makes rows focusable and adds <kbd>Enter</kbd> as an
+activation path. Without the prop, rows stay out of the tab order — a grid whose
+rows do nothing should not cost anyone a tab stop.
+
+<Canvas of={InteractionStories.OpenARowFromTheKeyboard} />
+
+## Preferences
+
+With a `tableId`, column order, sizing, and visibility persist to
+`localStorage`. `resetPreferences` from the render context clears the stored
+record rather than overwriting it with today's defaults, so an app that later
+changes its defaults is not out-voted by a saved copy of the old ones.
+
+<Canvas of={InteractionStories.RememberAndResetColumnPreferences} />

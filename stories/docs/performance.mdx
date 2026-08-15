@@ -1,0 +1,99 @@
+import { Meta } from "@storybook/addon-docs/blocks";
+
+<Meta title="DataGrid/Performance" />
+
+# Performance
+
+## The shape of the guarantee
+
+The grid renders a window, not a table. A 50,000-row grid commits the same rows,
+the same cells, and the same DOM nodes as a 1,000-row grid, because the only
+thing that decides how much work happens is the size of the viewport:
+
+```
+rows rendered = ceil(viewportHeight / rowHeight) + overscan
+```
+
+That is the promise virtualization actually makes, and it is asserted directly
+rather than inferred — `bun run bench` fails if the 50k scenario and the 1k
+scenario ever stop matching exactly.
+
+## Benchmarks count work, not time
+
+Wall-clock numbers fail on a busy CI runner and pass on a quiet laptop for
+reasons nobody can act on. The suite in `benchmarks/` counts work instead:
+
+| Metric | What it counts |
+| --- | --- |
+| `rowElements` | Row elements committed to the DOM |
+| `cellRenders` | Cell render functions invoked |
+| `commits` | React commits of the grid subtree, via `<Profiler>` |
+| `domNodes` | Elements inside the grid, chrome included |
+| `filterEvaluations` | Column filter predicate calls |
+| `comparisons` | Sort comparator calls |
+| `sectionKeyReads` | `sections.getKey` calls |
+
+Every input is fixed — fixture rows are index-derived rather than random, and
+the harness pins the measured viewport — so two machines produce the same
+numbers. Each scenario declares budgets (ceilings) and floors, because a grid
+that rendered nothing would otherwise pass every ceiling.
+
+```bash
+bun run bench                      # assert every scenario against its budget
+BENCH_REPORT_ONLY=1 bun run bench  # print the numbers without failing
+```
+
+## What the current ledger says
+
+| Scenario | Result |
+| --- | --- |
+| Mount 1,000 rows | 24 rows, 288 cell renders, 217 DOM nodes, 2 commits |
+| Mount 50,000 rows | Identical, to the node |
+| Scroll one viewport | ~208 cell renders, 1 commit per step |
+| Select one row | 144 cell renders, 1 commit — the window, not the data |
+| Filter 5,000 rows | Exactly 1 predicate call per row |
+| Sort 5,000 rows | 0.80 × n log n comparisons |
+| Search, per keystroke | 144 cell renders, 1 commit, at a 1,000,000 `totalCount` |
+| Group 2,000 rows | Exactly 1 `getKey` call per row |
+
+Mounting costs two render passes: one from the virtualizer's initial rect, one
+after it measures the real scroll element. A third would mean something is
+writing state during layout.
+
+## Getting the most out of it
+
+**Give `columns` and `data` stable identities.** Both are dependencies of the
+table model. An inline `columns={[...]}` array rebuilds every column on every
+parent render, and no amount of virtualization saves you from that:
+
+```tsx
+const columns = useMemo(() => buildColumns(currency), [currency]);
+```
+
+**Keep cell renderers cheap.** A cell renderer runs once per visible cell per
+commit — roughly 150 times per keystroke in a typical grid. That is fine for
+formatting and fine for a badge; it is not the place for `new Intl.NumberFormat`
+or a date parse. Hoist the formatter, or precompute the value on the row.
+
+**Leave `overscan` alone unless you have measured.** It defaults to 10, which
+covers a fast flick without rendering a second screenful. Raising it is a linear
+cost on every scroll step.
+
+**Set `rowHeight` when rows are not the density default.** The virtualizer
+estimates from it; a wrong estimate makes the scrollbar jump as real rows are
+measured.
+
+**Turn virtualization off below ~25 rows.** `virtualize={false}` skips the
+absolute-positioned row layer, which is cheaper for small embedded tables and
+prints correctly.
+
+**Pass a real `totalCount`.** It sizes the scroll model before the second page
+arrives. Passing `data.length` while paging produces a scrollbar that grows
+under the reader's cursor.
+
+## Server-side work
+
+`manualFiltering` and `manualSorting` hand filtering and sorting to the server
+while the grid keeps rendering the window it was given. Combined with
+`onLoadMore` — which fires once per loaded page, not once per scroll event — a
+grid over a million rows costs exactly what the loaded page costs.

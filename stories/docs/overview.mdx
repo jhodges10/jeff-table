@@ -1,0 +1,75 @@
+import { Canvas, Controls, Meta, Story } from "@storybook/addon-docs/blocks";
+import * as OverviewStories from "../overview.stories";
+
+<Meta of={OverviewStories} />
+
+# Overview
+
+A strongly typed, virtualized data grid built on TanStack Table v9. One
+component renders the header band, the column headers, the virtualized rows,
+and the footer, and every feature past the basics is opt-in.
+
+```tsx
+import { DataGrid, type DataGridColumnDef } from "@jhodges/jeff-table";
+import "@jhodges/jeff-table/styles.css";
+
+const columns: DataGridColumnDef<Person>[] = [
+  { accessorKey: "name", header: "Name", meta: { width: "minmax(170px, 1.2fr)" } },
+  { accessorKey: "email", header: "Email", meta: { width: "1.5fr" } },
+];
+
+<DataGrid columns={columns} data={people} totalCount={people.length} />;
+```
+
+<Canvas of={OverviewStories.Default} />
+
+## Why `totalCount` is required
+
+Most grids infer their size from the array they are handed. This one does not,
+because the array is usually a page.
+
+`totalCount` is the size of the complete server-side result set. The virtualizer
+uses it to build the scroll model before the second page exists, and the footer
+uses it to say `120 of 10,000 records` instead of `120 records`. Passing
+`data.length` is correct when you really do have everything; passing it when you
+do not produces a scrollbar that grows under the user's cursor.
+
+<Canvas of={OverviewStories.TenThousandVirtualRows} />
+
+## Column definitions
+
+Columns are TanStack `ColumnDef`s with a typed `meta` block. `meta` is where
+this package puts everything about presentation, so the column definition stays
+the single place a column is described:
+
+| `meta` field | Effect |
+| --- | --- |
+| `width` | Grid track, e.g. `"140px"`, `"1.5fr"`, `"minmax(170px, 1.2fr)"` |
+| `minWidth` / `maxWidth` | Resize bounds |
+| `cellAlign` / `headerAlign` | `left`, `center`, or `right` |
+| `filter` | Inline filter config — see [Features](?path=/docs/datagrid-features--docs) |
+| `headerTooltip` | Explanatory popover beside the header label |
+| `numericSort` | Sort by parsed number rather than text |
+| `prefix` / `suffix` | Wraps the default cell rendering |
+| `skeleton` | Shape and size of the loading placeholder, or `false` |
+| `reorderable` / `resizable` | Opt a single column out of a grid-wide feature |
+
+## Everything at once
+
+Filtering, reordering, resizing, visibility, global search, selection, sections,
+and slots, in one grid. Each is independently switchable; nothing here is
+required to use anything else.
+
+<Canvas of={OverviewStories.KitchenSink} />
+
+## Props
+
+<Controls of={OverviewStories.Default} />
+
+## When to turn virtualization off
+
+Virtualization costs a wrapper and an absolute-positioned row layer. Below a
+couple of dozen rows that is not worth it, and `virtualize={false}` renders the
+rows directly — useful for small embedded tables and for print styles.
+
+<Canvas of={OverviewStories.NoVirtualizationForSmallData} />
