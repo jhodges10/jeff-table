@@ -291,7 +291,19 @@ TanStack v9 supplies contiguous Shift selection through the row checkbox handler
 
 ## Theming and Tailwind
 
-The default theme uses CSS variables. Pass a typed `theme` object for runtime values:
+Every visual decision is a design token — 29 of them, covering the palette,
+overlay surfaces, elevation, focus ring, grid lines, skeletons, scrollbars,
+spacing, and type. Each resolves in three steps:
+
+1. whatever you set — the `theme` prop writes inline custom properties, or set
+   `--jt-*` in plain CSS on any ancestor;
+2. the matching shadcn/ui variable, if your app defines one (`--background`,
+   `--foreground`, `--primary`, `--muted`, `--border`, `--radius`, `--ring`,
+   `--popover`);
+3. a built-in light/dark pair.
+
+In an app that already defines the shadcn variables, the grid arrives themed.
+Pass a typed `theme` object for runtime values:
 
 ```tsx
 <DataGrid
@@ -322,6 +334,54 @@ For Tailwind, use the `className`, `classNames`, and per-column class hooks. Eve
 
 No Tailwind runtime is required by this package. The defaults live in the standard CSS `components` layer, so Tailwind's `utilities` layer wins when class slots supply utilities. This keeps the package compatible with Tailwind v4 projects, plain CSS, CSS Modules, and other styling systems.
 
+`dataGridThemeTokens` maps every `theme` key to its custom property, and
+`createThemeStyle` turns a partial theme into inline properties — both are
+exported for building your own theme editors.
+
+## Dark mode
+
+Dark mode is a property of the page, not a prop. Every built-in default is a
+`light-dark()` pair keyed off `color-scheme`, which CSS inherits:
+
+| The page does this | The grid |
+| --- | --- |
+| Declares `color-scheme: dark` on `<html>` | Follows it |
+| Sets `class="dark"` (Tailwind, shadcn/ui) | Follows it |
+| Sets `data-theme="dark"` (next-themes) | Follows it |
+| Redefines `--background` / `--foreground` in a `.dark` block | Uses those values |
+| Nothing | Renders light |
+
+Nothing needs to be passed, and nothing needs to stay in sync with your theme
+state. When a grid has to differ from the page around it — a dark analytics
+panel on a light dashboard — `colorScheme` pins it:
+
+```tsx
+<DataGrid colorScheme="dark" /> // "inherit" (default) | "light" | "dark" | "system"
+```
+
+A standalone `DateRangePickerPanel` rendered outside a grid needs the token
+block; wrap it in `.jt-theme`.
+
+Dark mode is not verified by eye: `bun run test:storybook` runs the whole story
+suite in Chromium twice, once against a light host page and once against a dark
+one, with axe assertions on both passes.
+
+## Performance
+
+The grid renders a window, not a table, so a 50,000-row grid commits the same
+rows, cells, and DOM nodes as a 1,000-row grid. `benchmarks/` asserts that
+directly — and because wall-clock numbers fail for reasons nobody can act on,
+every benchmark counts work instead: rendered rows, cell renders, React commits,
+DOM nodes, filter evaluations, comparator calls. Fixed fixtures and a pinned
+viewport mean two machines produce the same numbers.
+
+```sh
+bun run bench                      # assert every scenario against its budget
+BENCH_REPORT_ONLY=1 bun run bench  # print the numbers without failing
+```
+
+See `benchmarks/README.md` for the metrics, the budgets, and how to re-baseline.
+
 ## Development
 
 The package is type-checked with TypeScript 7 (the native Go compiler) and formatted/linted with Biome. Install the workspace-recommended **Biome** and **TypeScript 7** extensions so format-on-save and editor diagnostics match CI.
@@ -331,6 +391,8 @@ bun run check
 bun run typecheck
 bun run test
 bun run test:coverage
+bun run test:storybook
+bun run bench
 bun run registry:validate
 bun run registry:build
 bun run storybook

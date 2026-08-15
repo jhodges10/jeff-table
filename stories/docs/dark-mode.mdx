@@ -1,0 +1,91 @@
+import { Canvas, Meta } from "@storybook/addon-docs/blocks";
+import * as DarkModeStories from "../dark-mode.stories";
+
+<Meta of={DarkModeStories} />
+
+# Dark Mode
+
+Dark mode is a property of the page, not a prop.
+
+Every built-in default is a `light-dark()` pair keyed off `color-scheme`, which
+CSS inherits. A grid dropped into a dark page is dark; a grid in a light page is
+light; nothing needs to be passed, and nothing needs to be kept in sync with the
+app's theme state.
+
+```css
+/* the grid's own default, simplified */
+.jt-grid {
+  --jt-background: var(--background, light-dark(#fff, #0f172a));
+}
+```
+
+Use the **Scheme** control in the toolbar above to flip the host page these
+stories render into.
+
+## What flips the switch
+
+| The page does this | The grid |
+| --- | --- |
+| Declares `color-scheme: dark` on `<html>` | Follows it |
+| Sets `class="dark"` (Tailwind, shadcn/ui) | Follows it |
+| Sets `data-theme="dark"` (next-themes) | Follows it |
+| Redefines `--background` / `--foreground` in a `.dark` block | Uses those values directly |
+| Nothing | Renders light |
+
+The class hooks exist because those apps often flip their palette without ever
+declaring `color-scheme`. There is deliberately no matching hook for light: it
+is already the fallback, and a rule writing `color-scheme: light` onto the grid
+would out-rank a nearer dark ancestor that only sets the property by
+inheritance.
+
+<Canvas of={DarkModeStories.FollowsTheHostPage} />
+
+## Overlays
+
+Popovers and menus use `--jt-overlay-background`, which sits slightly above the
+grid surface in dark mode instead of matching it. On a light page the two are
+the same; in the dark the lift is what separates a menu from the rows behind it.
+
+<Canvas of={DarkModeStories.OverlaysStayLegible} />
+
+## Pinning a grid against its page
+
+`colorScheme` overrides all of the above, in either direction. It takes
+`"inherit"` (the default), `"light"`, `"dark"`, or `"system"` — where `system`
+follows the operating system regardless of what the host page says.
+
+```tsx
+<DataGrid colorScheme="dark" />
+```
+
+<Canvas of={DarkModeStories.PinnedAgainstTheHostPage} />
+
+<Canvas of={DarkModeStories.PinnedLightOnADarkPage} />
+
+## In a shadcn/ui app
+
+Host variables win over every built-in value, so a grid in an app that already
+defines `--background`, `--foreground`, `--primary`, and friends picks up that
+palette in both schemes without a `theme` prop.
+
+<Canvas of={DarkModeStories.InheritsShadcnVariables} />
+
+## Standalone components
+
+`DateRangePicker` carries the token block itself. A bare `DateRangePickerPanel`
+rendered outside a grid does not, so wrap it in `.jt-theme`:
+
+```tsx
+<div className="jt-theme">
+  <DateRangePickerPanel from={from} to={to} onChange={setRange} />
+</div>
+```
+
+## How this is verified
+
+Dark mode is not a story someone has to remember to open. `bun run
+test:storybook` runs the entire story suite twice in Chromium — once against a
+light host page, once against a dark one — and every story is audited by axe on
+both passes, so a contrast regression in either scheme fails the build.
+
+<Canvas of={DarkModeStories.SideBySide} />

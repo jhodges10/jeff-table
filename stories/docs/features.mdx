@@ -1,0 +1,101 @@
+import { Canvas, Meta } from "@storybook/addon-docs/blocks";
+import * as FeatureStories from "../features.stories";
+
+<Meta of={FeatureStories} />
+
+# Features
+
+Every feature on this page is off by default. A grid with no flags renders
+headers, virtualized rows, and a footer — turn on only what a view actually
+needs, and the rest costs nothing.
+
+## Sections
+
+`sections` groups the loaded rows under sticky headers without changing the flat
+column contract: rows keep their cells and their selection, and a section header
+spans the full width above them.
+
+```tsx
+<DataGrid
+  sections={{
+    getKey: (person) => person.department,
+    headerHeight: 44,
+    renderHeader: ({ key, rows }) => `${key} — ${rows.length} loaded`,
+    renderSelection: ({ checked, indeterminate, toggle }) => (
+      <IndeterminateCheckbox checked={checked} indeterminate={indeterminate}
+        onChange={(event) => toggle(event.currentTarget.checked)} />
+    ),
+  }}
+/>
+```
+
+Grouping happens over the *loaded* rows. With server-side paging, sort by the
+section key on the server so a group cannot be split across two pages.
+
+<Canvas of={FeatureStories.Sections} />
+
+## Inline filters
+
+`enableColumnFiltering` puts a filter affordance in each column header that
+declares `meta.filter`, and a summary menu in the header band. Six editors are
+built in, chosen by `type`:
+
+| `type` | Editor | Value shape |
+| --- | --- | --- |
+| `text` | Debounced search field | `string` |
+| `single-select` | Option list, one choice | `string` |
+| `multi-select` | Option list with checkboxes | `string[]` |
+| `number-range` | Min/max fields, optional currency format | `{ min?: number; max?: number }` |
+| `date-range` | The date-range panel | `{ from?: string; to?: string }` |
+| `boolean` | Yes/no | `boolean` |
+
+Escape closes a filter popover and returns focus to its trigger; the filter it
+set stays applied.
+
+<Canvas of={FeatureStories.InlineFilters} />
+
+## Global search
+
+`enableGlobalFilter` matches across every visible column. Pair it with
+`manualFiltering` and `onGlobalFilterChange` to hand the query to a server
+instead.
+
+<Canvas of={FeatureStories.GlobalSearch} />
+
+## Column visibility, order, and size
+
+Three independent flags, all persisted together as one preferences record:
+
+- `enableColumnVisibility` — the pinned far-right menu.
+- `enableColumnReordering` — drag handles, plus <kbd>Alt</kbd> + <kbd>←</kbd> /
+  <kbd>→</kbd> for keyboard users.
+- `enableColumnResizing` — drag to size, double-click to reset.
+
+Set `tableId` to persist them to `localStorage`, or pass your own
+`preferenceStorage` to keep them on a server. `preferenceStorage={null}` turns
+persistence off entirely.
+
+<Canvas of={FeatureStories.ColumnVisibilityAtFarRight} />
+
+<Canvas of={FeatureStories.DragAndDropColumns} />
+
+<Canvas of={FeatureStories.ResizableColumns} />
+
+## Selection
+
+`enableRowSelection` requires `getRowId`, and the type system enforces it: a
+selection keyed by array index silently follows the wrong record the moment a
+page loads or a sort changes.
+
+`isRowSelectable` disables individual rows, and the header checkbox reports the
+indeterminate state whenever the selection is partial.
+
+<Canvas of={FeatureStories.StableSelectionAndRangeSelection} />
+
+## Slots
+
+Six render slots take a node or a function of the render context
+(`{ isLoading, loadedCount, resetPreferences, selectedRows, table, totalCount }`),
+so toolbar content can read grid state without lifting it out of the grid.
+
+<Canvas of={FeatureStories.SeparateHeaderAndFooterSlots} />

@@ -1,0 +1,54 @@
+import { Canvas, Controls, Meta } from "@storybook/addon-docs/blocks";
+import * as PickerStories from "../date-range-picker.stories";
+
+<Meta of={PickerStories} />
+
+# Date Range Picker
+
+The editor behind the `date-range` column filter, exported on its own because a
+date range is rarely needed only inside a grid.
+
+```tsx
+import { DateRangePicker } from "@jhodges/jeff-table";
+
+const [range, setRange] = useState<DateRangeValue>({});
+
+<DateRangePicker from={range.from} to={range.to} onChange={setRange} />;
+```
+
+Values are ISO date strings (`YYYY-MM-DD`), not `Date` objects. A `Date` carries
+a time and a zone that a range boundary does not have, and round-tripping one
+through a query string or a saved view is where "off by one day" bugs come from.
+
+<Canvas of={PickerStories.Empty} />
+
+## Presets
+
+The rail on the left holds the ranges people actually pick — this week, this
+month, the last 30 days, this quarter, this year, and their previous
+counterparts. Choosing one fills both months and marks the preset as active;
+editing a boundary by hand clears that mark.
+
+<Canvas of={PickerStories.Prefilled} />
+
+A single day is a valid range with `from` equal to `to`.
+
+<Canvas of={PickerStories.SingleDay} />
+
+## The panel on its own
+
+`DateRangePickerPanel` is the same UI without the trigger and popover, for
+sidebars and filter drawers that own their own disclosure. Outside a grid it
+needs the token block, which the `.jt-theme` class provides:
+
+```tsx
+<div className="jt-theme">
+  <DateRangePickerPanel from={from} to={to} onChange={setRange} onCommit={close} />
+</div>
+```
+
+<Canvas of={PickerStories.EmbeddedPanel} />
+
+## Props
+
+<Controls of={PickerStories.Empty} />
