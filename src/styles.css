@@ -110,18 +110,20 @@
 
   /*
    * `color-scheme` picks which half of every `light-dark()` pair applies.
-   * Unset, it inherits from the host page, so a grid dropped into a dark app
-   * is dark without any extra props. The two class conventions consumers
-   * already use (`.dark` from Tailwind, `[data-theme]` from next-themes) are
-   * honoured explicitly, and the `colorScheme` prop overrides all of it.
+   * Unset, it inherits from the host page, so a grid dropped into a dark app is
+   * dark without any extra props. The dark-mode class conventions consumers
+   * already use (`.dark` from Tailwind, `[data-theme="dark"]` from next-themes)
+   * are honoured explicitly, since those apps often flip colours without ever
+   * declaring `color-scheme`.
+   *
+   * There is deliberately no matching hook for light: light is already the
+   * fallback, and a rule that wrote `color-scheme: light` onto the grid would
+   * out-rank a nearer dark ancestor that only sets it by inheritance. A light
+   * island inside a dark page is what the `colorScheme` prop is for.
    */
   :is(.dark, [data-theme="dark"])
   :is(.jt-grid, .jt-date-range-picker, .jt-theme):not([data-color-scheme]) {
     color-scheme: dark;
-  }
-  :is(.light, [data-theme="light"])
-    :is(.jt-grid, .jt-date-range-picker, .jt-theme):not([data-color-scheme]) {
-    color-scheme: light;
   }
   :is(.jt-grid, .jt-date-range-picker, .jt-theme)[data-color-scheme="dark"] {
     color-scheme: dark;

@@ -2,7 +2,7 @@ import type { RowData } from "@tanstack/react-table";
 import type { DataGridInstance } from "./features";
 import { ColumnsIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
-import { cx, reconcileColumnOrder } from "./utils";
+import { closeDetailsOnEscape, cx, reconcileColumnOrder } from "./utils";
 
 interface ColumnVisibilityMenuProps<TData extends RowData> {
   className?: string;
@@ -43,6 +43,7 @@ export function ColumnVisibilityMenu<TData extends RowData>({
       className={cx("jt-column-menu", className)}
       data-slot="column-menu"
       name={popoverGroup}
+      onKeyDown={(event) => closeDetailsOnEscape(event, () => onOpenChange(false))}
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
       open={open}
     >

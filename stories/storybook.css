@@ -140,9 +140,17 @@ body {
 .story-scheme-panel {
   padding: 1rem;
   border-radius: 1rem;
+  color: var(--story-ink);
   background: var(--story-page);
 }
-.story-scheme-panel h3 {
+/* Stand-ins for the class a host app puts on <html>. */
+.story-scheme-panel.light {
+  color-scheme: light;
+}
+.story-scheme-panel.dark {
+  color-scheme: dark;
+}
+.story-scheme-panel h2 {
   margin: 0 0 0.75rem;
   color: var(--story-ink);
   font-size: 0.8125rem;
