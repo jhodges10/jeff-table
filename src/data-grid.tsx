@@ -14,7 +14,8 @@ import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
 import { DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
 import { DataGridFiltersMenu, InlineFilter } from "./inline-filter";
-import type { DataGridProps, DataGridRenderContext, DataGridSlot, DataGridTheme } from "./types";
+import { createThemeStyle } from "./theme";
+import type { DataGridProps, DataGridRenderContext, DataGridSlot } from "./types";
 import { useColumnReordering } from "./use-column-reordering";
 import { useDataGridState } from "./use-data-grid-state";
 import {
@@ -113,34 +114,6 @@ function errorMessage(error: unknown): string {
   return typeof error === "string" ? error : "Something went wrong while loading these records.";
 }
 
-function createThemeStyle(
-  theme: Partial<DataGridTheme> | undefined,
-  style: React.CSSProperties | undefined,
-): React.CSSProperties {
-  return {
-    ...style,
-    ...(theme?.accent === undefined ? {} : { "--jt-accent": theme.accent }),
-    ...(theme?.accentForeground === undefined
-      ? {}
-      : { "--jt-accent-foreground": theme.accentForeground }),
-    ...(theme?.background === undefined ? {} : { "--jt-background": theme.background }),
-    ...(theme?.border === undefined ? {} : { "--jt-border": theme.border }),
-    ...(theme?.danger === undefined ? {} : { "--jt-danger": theme.danger }),
-    ...(theme?.foreground === undefined ? {} : { "--jt-foreground": theme.foreground }),
-    ...(theme?.headerBackground === undefined
-      ? {}
-      : { "--jt-header-background": theme.headerBackground }),
-    ...(theme?.hover === undefined ? {} : { "--jt-hover": theme.hover }),
-    ...(theme?.muted === undefined ? {} : { "--jt-muted": theme.muted }),
-    ...(theme?.mutedForeground === undefined
-      ? {}
-      : { "--jt-muted-foreground": theme.mutedForeground }),
-    ...(theme?.radius === undefined ? {} : { "--jt-radius": theme.radius }),
-    ...(theme?.selected === undefined ? {} : { "--jt-selected": theme.selected }),
-    ...(theme?.shadow === undefined ? {} : { "--jt-shadow": theme.shadow }),
-  } as React.CSSProperties;
-}
-
 function LoadingIndicator({ active, children }: { active: boolean; children: React.ReactNode }) {
   const [phase, setPhase] = React.useState<"exiting" | "hidden" | "visible">(
     active ? "visible" : "hidden",
@@ -188,6 +161,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     totalCount,
     className,
     classNames = {},
+    colorScheme = "inherit",
     density = "comfortable",
     enableColumnFiltering = false,
     enableColumnReordering = false,
@@ -472,6 +446,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   return (
     <div
       className={cx("jt-grid", classNames.root, className)}
+      data-color-scheme={colorScheme === "inherit" ? undefined : colorScheme}
       data-density={density}
       data-loading={isLoading || isLoadingMore || undefined}
       data-testid={testId}

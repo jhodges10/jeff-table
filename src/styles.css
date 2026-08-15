@@ -42,21 +42,98 @@
     box-sizing: border-box;
   }
 
-  .jt-grid {
-    --jt-accent: var(--primary, #2563eb);
-    --jt-accent-foreground: var(--primary-foreground, #fff);
-    --jt-background: var(--background, #fff);
-    --jt-border: var(--border, #e2e8f0);
-    --jt-danger: var(--destructive, #dc2626);
-    --jt-foreground: var(--foreground, #0f172a);
-    --jt-header-background: var(--muted, #f8fafc);
-    --jt-hover: var(--accent, #f8fafc);
-    --jt-muted: var(--muted, #f1f5f9);
-    --jt-muted-foreground: var(--muted-foreground, #64748b);
+  /*
+   * Design tokens. Each one resolves in three steps:
+   *   1. whatever the consumer sets (the `theme` prop writes these inline, or
+   *      plain CSS can set them on any ancestor),
+   *   2. the matching shadcn/ui variable when the host app defines one,
+   *   3. a built-in light/dark pair.
+   *
+   * `light-dark()` reads the element's used `color-scheme`, so step 3 follows
+   * the host page by default. See the color-scheme rules below.
+   *
+   * `.jt-theme` is the opt-in hook for standalone pieces — wrap a bare
+   * `DateRangePickerPanel` in it to give the panel the same tokens.
+   */
+  .jt-grid,
+  .jt-date-range-picker,
+  .jt-theme {
+    /* Palette */
+    --jt-accent: var(--primary, light-dark(#2563eb, #60a5fa));
+    --jt-accent-foreground: var(--primary-foreground, light-dark(#fff, #0b1220));
+    --jt-background: var(--background, light-dark(#fff, #0f172a));
+    --jt-foreground: var(--foreground, light-dark(#0f172a, #e2e8f0));
+    --jt-muted: var(--muted, light-dark(#f1f5f9, #1e293b));
+    --jt-muted-foreground: var(--muted-foreground, light-dark(#64748b, #94a3b8));
+    --jt-border: var(--border, light-dark(#e2e8f0, #334155));
+    --jt-danger: var(--destructive, light-dark(#dc2626, #f87171));
+
+    /* Surfaces */
+    --jt-header-background: var(--muted, light-dark(#f8fafc, #1e293b));
+    --jt-header-foreground: var(--jt-muted-foreground);
+    --jt-hover: var(--accent, light-dark(#f8fafc, #1e293b));
+    --jt-selected: light-dark(
+      color-mix(in srgb, var(--jt-accent) 9%, var(--jt-background)),
+      color-mix(in srgb, var(--jt-accent) 20%, var(--jt-background))
+    );
+    --jt-section-background: var(--jt-muted);
+    --jt-overlay-background: var(--popover, light-dark(#fff, #172033));
+    --jt-tooltip-background: light-dark(#0f172a, #e2e8f0);
+    --jt-tooltip-foreground: light-dark(#f8fafc, #0f172a);
+    --jt-skeleton: color-mix(in srgb, var(--jt-muted-foreground) 22%, var(--jt-muted));
+    --jt-scrollbar-thumb: color-mix(in srgb, var(--jt-muted-foreground) 48%, transparent);
+    --jt-scrollbar-thumb-hover: color-mix(
+      in srgb,
+      var(--jt-scrollbar-thumb) 70%,
+      var(--jt-muted-foreground)
+    );
+    --jt-grid-line: var(--jt-border);
+    --jt-focus-ring: var(--ring, var(--jt-accent));
+
+    /* Elevation */
+    --jt-shadow-color: light-dark(rgb(15 23 42 / 0.06), rgb(2 6 23 / 0.55));
+    --jt-overlay-shadow-color: light-dark(rgb(15 23 42 / 0.18), rgb(2 6 23 / 0.7));
+    --jt-shadow: 0 1px 2px var(--jt-shadow-color);
+    --jt-overlay-shadow: 0 12px 30px var(--jt-overlay-shadow-color);
+    --jt-sticky-shadow:
+      0 1px 0 var(--jt-grid-line),
+      0 0.375rem 0.75rem color-mix(in srgb, var(--jt-foreground) 8%, transparent);
+
+    /* Shape, spacing, and type */
     --jt-radius: var(--radius, 0.625rem);
-    --jt-selected: color-mix(in srgb, var(--primary, #2563eb) 9%, var(--background, #fff));
-    --jt-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
-    --jt-cell-inline-padding: 0.75rem;
+    --jt-control-radius: 0.375rem;
+    --jt-cell-padding-inline: var(--jt-cell-inline-padding, 0.75rem);
+    --jt-cell-padding-block: 0.5rem;
+    --jt-font-family: inherit;
+    --jt-font-size: 0.875rem;
+  }
+
+  /*
+   * `color-scheme` picks which half of every `light-dark()` pair applies.
+   * Unset, it inherits from the host page, so a grid dropped into a dark app
+   * is dark without any extra props. The two class conventions consumers
+   * already use (`.dark` from Tailwind, `[data-theme]` from next-themes) are
+   * honoured explicitly, and the `colorScheme` prop overrides all of it.
+   */
+  :is(.dark, [data-theme="dark"])
+  :is(.jt-grid, .jt-date-range-picker, .jt-theme):not([data-color-scheme]) {
+    color-scheme: dark;
+  }
+  :is(.light, [data-theme="light"])
+    :is(.jt-grid, .jt-date-range-picker, .jt-theme):not([data-color-scheme]) {
+    color-scheme: light;
+  }
+  :is(.jt-grid, .jt-date-range-picker, .jt-theme)[data-color-scheme="dark"] {
+    color-scheme: dark;
+  }
+  :is(.jt-grid, .jt-date-range-picker, .jt-theme)[data-color-scheme="light"] {
+    color-scheme: light;
+  }
+  :is(.jt-grid, .jt-date-range-picker, .jt-theme)[data-color-scheme="system"] {
+    color-scheme: light dark;
+  }
+
+  .jt-grid {
     position: relative;
     min-width: 0;
     overflow: visible;
@@ -65,8 +142,8 @@
     border-radius: var(--jt-radius);
     background: var(--jt-background);
     box-shadow: var(--jt-shadow);
-    font-family: inherit;
-    font-size: 0.875rem;
+    font-family: var(--jt-font-family);
+    font-size: var(--jt-font-size);
   }
 
   .jt-grid button,
@@ -127,7 +204,7 @@
     flex: 1;
     overflow: auto;
     outline: none;
-    scrollbar-color: color-mix(in srgb, var(--jt-muted-foreground) 48%, transparent) transparent;
+    scrollbar-color: var(--jt-scrollbar-thumb) transparent;
     scrollbar-width: thin;
   }
   .jt-grid__viewport::-webkit-scrollbar {
@@ -143,11 +220,11 @@
     min-height: 2.5rem;
     border: 2px solid transparent;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--jt-muted-foreground) 48%, transparent);
+    background: var(--jt-scrollbar-thumb);
     background-clip: padding-box;
   }
   .jt-grid__viewport::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--jt-muted-foreground) 72%, transparent);
+    background: var(--jt-scrollbar-thumb-hover);
     background-clip: padding-box;
   }
   .jt-grid__viewport::-webkit-scrollbar-button {
@@ -157,7 +234,7 @@
   }
 
   .jt-grid__viewport:focus-visible {
-    box-shadow: inset 0 0 0 2px var(--jt-accent);
+    box-shadow: inset 0 0 0 2px var(--jt-focus-ring);
   }
   .jt-grid__canvas {
     position: relative;
@@ -173,7 +250,7 @@
     width: 100%;
     min-width: max-content;
     background: var(--jt-header-background);
-    box-shadow: 0 1px 0 var(--jt-border);
+    box-shadow: 0 1px 0 var(--jt-grid-line);
   }
 
   .jt-grid__column-header-row,
@@ -189,7 +266,7 @@
     display: flex;
     min-width: 0;
     align-items: center;
-    border-right: 1px solid var(--jt-border);
+    border-right: 1px solid var(--jt-grid-line);
   }
 
   .jt-grid__column-header:last-child,
@@ -202,8 +279,8 @@
     flex-direction: column;
     align-items: stretch;
     justify-content: center;
-    padding: 0.375rem var(--jt-cell-inline-padding);
-    color: var(--jt-muted-foreground);
+    padding: 0.375rem var(--jt-cell-padding-inline);
+    color: var(--jt-header-foreground);
     font-size: 0.75rem;
     font-weight: 650;
     letter-spacing: 0.015em;
@@ -359,11 +436,11 @@
     width: max-content;
     max-width: 16rem;
     transform: translateX(-50%);
-    border-radius: 0.375rem;
+    border-radius: var(--jt-control-radius);
     padding: 0.375rem 0.5rem;
-    color: var(--jt-background);
-    background: var(--jt-foreground);
-    box-shadow: var(--jt-shadow);
+    color: var(--jt-tooltip-foreground);
+    background: var(--jt-tooltip-background);
+    box-shadow: var(--jt-overlay-shadow);
     font-weight: 400;
   }
   .jt-grid__header-tooltip:hover .jt-grid__header-tooltip-content,
@@ -382,7 +459,7 @@
     width: 100%;
     min-height: 1.75rem;
     border: 1px solid var(--jt-border);
-    border-radius: 0.375rem;
+    border-radius: var(--jt-control-radius);
     padding: 0.25rem 0.4rem;
     color: var(--jt-foreground);
     background: var(--jt-background);
@@ -391,8 +468,8 @@
     outline: none;
   }
   .jt-search input:focus {
-    border-color: var(--jt-accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--jt-accent) 18%, transparent);
+    border-color: var(--jt-focus-ring);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--jt-focus-ring) 25%, transparent);
   }
 
   .jt-column-filter,
@@ -462,8 +539,8 @@
     border: 1px solid var(--jt-border);
     border-radius: 0.5rem;
     color: var(--jt-foreground);
-    background: var(--jt-background);
-    box-shadow: 0 12px 30px rgb(15 23 42 / 0.18);
+    background: var(--jt-overlay-background);
+    box-shadow: var(--jt-overlay-shadow);
     font-size: 0.8125rem;
     font-weight: 400;
     letter-spacing: normal;
@@ -494,14 +571,14 @@
     align-items: center;
     gap: 0.4rem;
     border: 1px solid var(--jt-border);
-    border-radius: 0.375rem;
+    border-radius: var(--jt-control-radius);
     padding: 0 0.625rem;
     color: var(--jt-muted-foreground);
-    background: var(--jt-background);
+    background: var(--jt-overlay-background);
   }
   .jt-filter-editor__search:focus-within {
-    border-color: var(--jt-accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--jt-accent) 15%, transparent);
+    border-color: var(--jt-focus-ring);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--jt-focus-ring) 22%, transparent);
   }
   .jt-filter-editor__search input {
     width: 100%;
@@ -602,10 +679,15 @@
   .jt-filter-editor__range-fields input {
     min-width: 0;
     border: 1px solid var(--jt-border);
-    border-radius: 0.375rem;
+    border-radius: var(--jt-control-radius);
     padding: 0.4rem;
     color: var(--jt-foreground);
-    background: var(--jt-background);
+    background: var(--jt-overlay-background);
+  }
+  .jt-filter-editor__range-fields input:focus-visible {
+    border-color: var(--jt-focus-ring);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--jt-focus-ring) 22%, transparent);
   }
 
   .jt-date-range-picker,
@@ -653,7 +735,7 @@
   .jt-date-range-picker__clear:focus-visible,
   .jt-date-range-panel button:focus-visible,
   .jt-date-range-calendar .rdp-day_button:focus-visible {
-    outline: 2px solid var(--jt-accent, #2563eb);
+    outline: 2px solid var(--jt-focus-ring, var(--jt-accent, #2563eb));
     outline-offset: 2px;
   }
   .jt-date-range-picker__clear {
@@ -683,8 +765,8 @@
     overflow: auto;
     border: 1px solid var(--jt-border, #e2e8f0);
     border-radius: 0.625rem;
-    background: var(--jt-background, #fff);
-    box-shadow: 0 18px 45px rgb(15 23 42 / 0.2);
+    background: var(--jt-overlay-background, #fff);
+    box-shadow: var(--jt-overlay-shadow, 0 18px 45px rgb(15 23 42 / 0.2));
   }
   .jt-date-range-panel {
     position: relative;
@@ -692,7 +774,7 @@
     width: max-content;
     min-width: 42rem;
     color: var(--jt-foreground, #0f172a);
-    background: var(--jt-background, #fff);
+    background: var(--jt-overlay-background, #fff);
     font-family: inherit;
     font-size: 0.8125rem;
     border: 0;
@@ -710,7 +792,7 @@
     overflow-y: auto;
     border-right: 1px solid var(--jt-border, #e2e8f0);
     padding: 0.5rem;
-    scrollbar-color: color-mix(in srgb, var(--jt-muted-foreground, #64748b) 40%, transparent)
+    scrollbar-color: var(--jt-scrollbar-thumb, color-mix(in srgb, #64748b 40%, transparent))
       transparent;
     scrollbar-width: thin;
   }
@@ -723,7 +805,7 @@
   .jt-date-range-panel__presets::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--jt-muted-foreground, #64748b) 45%, transparent);
+    background: var(--jt-scrollbar-thumb, color-mix(in srgb, #64748b 45%, transparent));
     background-clip: padding-box;
   }
   .jt-date-range-panel__preset {
@@ -904,7 +986,7 @@
     width: 2rem;
     height: 2rem;
     border: 1px solid var(--jt-border);
-    border-radius: 0.4rem;
+    border-radius: var(--jt-control-radius);
     background: color-mix(in srgb, var(--jt-header-background) 92%, transparent);
     box-shadow: var(--jt-shadow);
   }
@@ -936,8 +1018,8 @@
     border-radius: 0.5rem;
     padding: 0;
     color: var(--jt-foreground);
-    background: var(--jt-background);
-    box-shadow: 0 14px 34px rgb(15 23 42 / 0.16);
+    background: var(--jt-overlay-background);
+    box-shadow: var(--jt-overlay-shadow);
   }
   .jt-column-menu__title {
     display: flex;
@@ -981,7 +1063,7 @@
   }
   .jt-grid__row {
     left: 0;
-    border-bottom: 1px solid var(--jt-border);
+    border-bottom: 1px solid var(--jt-grid-line);
     background: var(--jt-background);
   }
   .jt-grid__row:hover {
@@ -995,13 +1077,13 @@
   }
   .jt-grid__row:focus-visible {
     z-index: 2;
-    outline: 2px solid var(--jt-accent);
+    outline: 2px solid var(--jt-focus-ring);
     outline-offset: -2px;
   }
   .jt-grid__cell {
     height: 100%;
     overflow: hidden;
-    padding: 0.5rem var(--jt-cell-inline-padding);
+    padding: var(--jt-cell-padding-block) var(--jt-cell-padding-inline);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -1043,7 +1125,7 @@
     border-radius: 0.2rem;
     color: var(--jt-accent-foreground);
     background: var(--jt-background);
-    box-shadow: 0 1px 1px rgb(15 23 42 / 0.04);
+    box-shadow: 0 1px 1px var(--jt-shadow-color);
     transition:
       color 200ms ease,
       background-color 200ms ease,
@@ -1061,7 +1143,7 @@
   .jt-check__input:focus-visible + .jt-check__visual {
     box-shadow:
       0 0 0 2px var(--jt-background),
-      0 0 0 4px color-mix(in srgb, var(--jt-accent) 80%, transparent);
+      0 0 0 4px color-mix(in srgb, var(--jt-focus-ring) 80%, transparent);
   }
   .jt-check[data-disabled="true"] {
     opacity: 0.5;
@@ -1097,30 +1179,28 @@
     display: grid;
     width: 100%;
     min-width: max-content;
-    border-top: 1px solid var(--jt-border);
-    border-bottom: 1px solid var(--jt-border);
-    background: var(--jt-muted);
+    border-top: 1px solid var(--jt-grid-line);
+    border-bottom: 1px solid var(--jt-grid-line);
+    background: var(--jt-section-background);
     font-weight: 650;
   }
   .jt-grid__section[data-sticky="true"] {
     z-index: 4;
-    box-shadow:
-      0 1px 0 var(--jt-border),
-      0 0.375rem 0.75rem color-mix(in srgb, var(--jt-foreground) 8%, transparent);
+    box-shadow: var(--jt-sticky-shadow);
   }
   .jt-grid__section-selection {
     position: sticky;
     z-index: 1;
     left: 0;
-    border-right: 1px solid var(--jt-border);
-    background: var(--jt-muted);
+    border-right: 1px solid var(--jt-grid-line);
+    background: var(--jt-section-background);
   }
   .jt-grid__section-content {
     position: sticky;
     left: 0;
     min-width: 0;
-    padding: 0.5rem 0.75rem;
-    background: var(--jt-muted);
+    padding: var(--jt-cell-padding-block) var(--jt-cell-padding-inline);
+    background: var(--jt-section-background);
   }
   .jt-grid__section[data-selection="true"] .jt-grid__section-content {
     left: 44px;
@@ -1131,7 +1211,7 @@
     max-width: 100%;
     height: 0.875rem;
     border-radius: 0.3rem;
-    background: color-mix(in srgb, var(--jt-muted-foreground) 22%, var(--jt-muted));
+    background: var(--jt-skeleton);
     animation: jt-pulse 1.6s ease-in-out infinite;
   }
   .jt-skeleton[data-shape="circle"] {
@@ -1205,13 +1285,11 @@
   }
 
   .jt-grid[data-density="compact"] {
-    font-size: 0.8125rem;
+    --jt-font-size: 0.8125rem;
+    --jt-cell-padding-block: 0.375rem;
   }
-  .jt-grid[data-density="compact"] .jt-grid__cell {
-    padding-block: 0.375rem;
-  }
-  .jt-grid[data-density="spacious"] .jt-grid__cell {
-    padding-inline: 1rem;
+  .jt-grid[data-density="spacious"] {
+    --jt-cell-padding-inline: 1rem;
   }
 
   @media (prefers-reduced-motion: reduce) {

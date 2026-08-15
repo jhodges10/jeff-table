@@ -66,21 +66,81 @@ export interface DataGridPreferenceStorage {
   save: (tableId: string, preferences: DataGridPreferences) => void;
 }
 
+/**
+ * The complete design-token surface. Every field maps to one `--jt-*` custom
+ * property (see `dataGridThemeTokens`); pass any subset through the `theme`
+ * prop, or set the same custom properties in CSS.
+ */
 export interface DataGridTheme {
+  /** Primary action colour: sort affordances, focus rings, selected checkboxes. */
   accent: string;
+  /** Text/icon colour drawn on top of `accent`. */
   accentForeground: string;
+  /** Grid surface behind rows. */
   background: string;
+  /** Outer border of the grid, header band, footer, and popovers. */
   border: string;
+  /** Vertical padding inside body cells. */
+  cellPaddingBlock: string;
+  /** Horizontal padding inside header and body cells. */
+  cellPaddingInline: string;
+  /** Corner radius for inputs, buttons, and menu items. */
+  controlRadius: string;
+  /** Error text colour. */
   danger: string;
+  /** Focus ring colour. Defaults to `accent`. */
+  focusRing: string;
+  /** Font stack for the whole grid. Defaults to `inherit`. */
+  fontFamily: string;
+  /** Base font size for body cells. Density presets adjust this. */
+  fontSize: string;
+  /** Primary text colour. */
   foreground: string;
+  /** Cell separator colour. Defaults to `border`. */
+  gridLine: string;
+  /** Column header band background. */
   headerBackground: string;
+  /** Column header label colour. Defaults to `mutedForeground`. */
+  headerForeground: string;
+  /** Row hover background. */
   hover: string;
+  /** Subdued fill for section headers, menu hover, and skeleton bases. */
   muted: string;
+  /** Secondary text colour. */
   mutedForeground: string;
+  /** Background for popovers, menus, and the date-range panel. */
+  overlayBackground: string;
+  /** Complete `box-shadow` value for popovers and menus. */
+  overlayShadow: string;
+  /** Corner radius of the grid shell. */
   radius: string;
+  /** Viewport scrollbar thumb colour. */
+  scrollbarThumb: string;
+  /** Section header background. Defaults to `muted`. */
+  sectionBackground: string;
+  /** Selected row background. */
   selected: string;
+  /** Complete `box-shadow` value for the grid shell. */
   shadow: string;
+  /** Skeleton placeholder fill. */
+  skeleton: string;
+  /** Complete `box-shadow` value for a pinned section header. */
+  stickyShadow: string;
+  /** Header tooltip background. */
+  tooltipBackground: string;
+  /** Header tooltip text colour. */
+  tooltipForeground: string;
 }
+
+/**
+ * How the grid resolves its built-in light/dark token pairs.
+ *
+ * - `inherit` (default) follows the host page's `color-scheme`, including the
+ *   `.dark` and `[data-theme="dark"]` class conventions.
+ * - `system` follows the operating system regardless of the host page.
+ * - `light` / `dark` pin the grid.
+ */
+export type DataGridColorScheme = "dark" | "inherit" | "light" | "system";
 
 export type DataGridClassNameSlot =
   | "root"
@@ -151,6 +211,7 @@ export interface DataGridBaseProps<TData extends RowData> {
   className?: string;
   classNames?: DataGridClassNames;
   columnFilters?: ColumnFiltersState;
+  colorScheme?: DataGridColorScheme;
   columns: readonly DataGridColumnDef<TData>[];
   data: readonly TData[];
   defaultColumnFilters?: ColumnFiltersState;
