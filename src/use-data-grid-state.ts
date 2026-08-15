@@ -83,9 +83,18 @@ export function useDataGridState(options: DataGridStateOptions) {
   );
 
   const hasMounted = React.useRef(false);
+  // A reset clears storage, and the state change it causes must not immediately
+  // write the current defaults back: a stored copy of today's defaults would
+  // silently outrank tomorrow's.
+  const skipNextSave = React.useRef(false);
   React.useEffect(() => {
     if (!hasMounted.current) {
       hasMounted.current = true;
+      return;
+    }
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      options.onPreferencesChange?.(preferences);
       return;
     }
     if (options.tableId && storage) storage.save(options.tableId, preferences);
@@ -125,6 +134,7 @@ export function useDataGridState(options: DataGridStateOptions) {
   );
 
   const resetPreferences = React.useCallback(() => {
+    skipNextSave.current = true;
     setColumnOrder([...options.columnIds]);
     setColumnSizing({});
     setColumnVisibility(options.defaultColumnVisibility ?? {});

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DataGrid } from "./data-grid";
 import type { DataGridColumnDef } from "./features";
 import { defined } from "./test/defined";
+import type { DataGridPreferences } from "./types";
 
 interface TestPerson {
   id: string;
@@ -749,6 +750,51 @@ describe("DataGrid", () => {
     expect(alert).toHaveTextContent("Service down.");
     expect(alert.closest('[role="gridcell"]')).not.toBeNull();
     expect(alert.closest('[role="row"]')).not.toBeNull();
+  });
+
+  it("clears stored preferences on reset instead of saving the defaults back", async () => {
+    const user = userEvent.setup();
+    const store = new Map<string, DataGridPreferences>();
+    const storage = {
+      load: (tableId: string) => store.get(tableId),
+      remove: vi.fn((tableId: string) => {
+        store.delete(tableId);
+      }),
+      save: vi.fn((tableId: string, preferences: DataGridPreferences) => {
+        store.set(tableId, preferences);
+      }),
+    };
+
+    render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnVisibility
+        preferenceStorage={storage}
+        slots={{
+          footerEnd: ({ resetPreferences }) => (
+            <button onClick={resetPreferences} type="button">
+              Reset
+            </button>
+          ),
+        }}
+        tableId="reset-test"
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Show or hide columns"));
+    await user.click(screen.getByRole("checkbox", { name: "Email" }));
+    expect(store.get("reset-test")?.columnVisibility.email).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+
+    // Storage is empty, not repopulated: a saved copy of today's defaults would
+    // outrank whatever defaults the app ships tomorrow.
+    expect(storage.remove).toHaveBeenCalledWith("reset-test");
+    expect(store.has("reset-test")).toBe(false);
+    expect(screen.getByRole("columnheader", { name: /Email/ })).toBeVisible();
   });
 
   it("inherits the host colour scheme until one is pinned", () => {

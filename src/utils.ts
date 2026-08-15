@@ -15,6 +15,22 @@ export function cx(...values: Array<string | false | null | undefined>): string 
   return values.filter(Boolean).join(" ");
 }
 
+/**
+ * Closes a `<details>` popover on Escape and returns focus to its summary, so
+ * a keyboard user is never stranded inside an open menu.
+ */
+export function closeDetailsOnEscape(
+  event: { currentTarget: EventTarget | null; key: string; preventDefault: () => void },
+  close: () => void,
+): void {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  close();
+  const summary =
+    event.currentTarget instanceof Element ? event.currentTarget.querySelector("summary") : null;
+  if (summary instanceof HTMLElement) summary.focus();
+}
+
 export function getColumnDefinitionId<TData extends RowData>(
   column: DataGridColumnDef<TData>,
 ): string | undefined {

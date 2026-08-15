@@ -4,6 +4,7 @@ import { DateRangePickerPanel } from "./date-range-picker";
 import type { DataGridColumn, DataGridInstance } from "./features";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
 import type { DataGridColumnFilterConfig, DataGridFilterOption } from "./types";
+import { closeDetailsOnEscape } from "./utils";
 
 type FilterValue = string | string[] | undefined;
 
@@ -372,7 +373,10 @@ export function InlineFilter<TData extends RowData>({
     <details
       className="jt-column-filter"
       onClick={stopHeaderActivation}
-      onKeyDown={stopHeaderActivation}
+      onKeyDown={(event) => {
+        stopHeaderActivation(event);
+        closeDetailsOnEscape(event, close);
+      }}
       name={popoverGroup}
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
       open={open}
@@ -435,6 +439,7 @@ export function DataGridFiltersMenu<TData extends RowData>({
   return (
     <details
       className="jt-filters-menu"
+      onKeyDown={(event) => closeDetailsOnEscape(event, () => onOpenChange(false))}
       onToggle={(event) => {
         onOpenChange(event.currentTarget.open);
         if (!event.currentTarget.open) setActiveColumnId(undefined);
