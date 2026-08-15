@@ -68,6 +68,11 @@
           "target": "@ui/jeff-table/preferences.ts"
         },
         {
+          "path": "src/theme.ts",
+          "type": "registry:lib",
+          "target": "@ui/jeff-table/theme.ts"
+        },
+        {
           "path": "src/types.ts",
           "type": "registry:lib",
           "target": "@ui/jeff-table/types.ts"

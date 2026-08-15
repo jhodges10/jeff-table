@@ -708,6 +708,41 @@ describe("DataGrid", () => {
     expect(grid.style.getPropertyValue("--jt-background")).toBe("");
   });
 
+  it("inherits the host colour scheme until one is pinned", () => {
+    const { rerender } = render(
+      <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
+    );
+    const grid = screen.getByTestId("data-grid");
+
+    // No attribute means `color-scheme` inherits, so a grid dropped into a dark
+    // app follows it without the consumer wiring anything up.
+    expect(grid).not.toHaveAttribute("data-color-scheme");
+
+    for (const scheme of ["dark", "light", "system"] as const) {
+      rerender(
+        <DataGrid
+          colorScheme={scheme}
+          columns={columns}
+          data={rows}
+          totalCount={3}
+          virtualize={false}
+        />,
+      );
+      expect(grid).toHaveAttribute("data-color-scheme", scheme);
+    }
+
+    rerender(
+      <DataGrid
+        colorScheme="inherit"
+        columns={columns}
+        data={rows}
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+    expect(grid).not.toHaveAttribute("data-color-scheme");
+  });
+
   it("loads more when virtualization approaches the loaded boundary", async () => {
     const onLoadMore = vi.fn();
     render(

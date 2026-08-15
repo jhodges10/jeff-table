@@ -26,11 +26,17 @@ export {
   createLocalStoragePreferenceStorage,
   parseDataGridPreferences,
 } from "./preferences";
+export {
+  createThemeStyle,
+  type DataGridThemeTokenName,
+  dataGridThemeTokens,
+} from "./theme";
 export type {
   DataGridAlignment,
   DataGridBaseProps,
   DataGridClassNameSlot,
   DataGridClassNames,
+  DataGridColorScheme,
   DataGridColumnFilterConfig,
   DataGridColumnMeta,
   DataGridDensity,

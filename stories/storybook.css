@@ -1,30 +1,59 @@
-html {
+/*
+ * Storybook chrome only. Every colour here is a light-dark() pair driven by the
+ * `color-scheme` that `.story-canvas` declares, which is exactly how a host app
+ * would drive the grid's own tokens.
+ */
+.story-canvas {
+  --story-page: light-dark(#f5f7fb, #060b18);
+  --story-ink: light-dark(#0f172a, #e2e8f0);
+  --story-ink-muted: light-dark(#475569, #94a3b8);
+  --story-line: light-dark(#dbe3ef, #334155);
+  --story-surface: light-dark(#ffffff, #111c33);
+  display: block;
+  min-height: calc(100vh - 2rem);
+  margin: -1rem;
+  padding: 1rem;
+  color: var(--story-ink);
+  background: var(--story-page);
+}
+.story-canvas.light {
+  color-scheme: light;
+}
+.story-canvas.dark {
+  color-scheme: dark;
+}
+
+html:has(.story-canvas.dark) {
+  background: #060b18;
+}
+html:has(.story-canvas.light) {
   background: #f5f7fb;
 }
 body {
   margin: 0;
-  color: #0f172a;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
+
 .story-shell {
   min-width: 0;
   padding: 0.5rem;
 }
 .story-note {
   margin: 0 0 0.75rem;
-  color: #475569;
+  color: var(--story-ink-muted);
   font-size: 0.8125rem;
 }
 .story-toolbar-button {
-  border: 1px solid #dbe3ef;
+  border: 1px solid var(--story-line);
   border-radius: 0.45rem;
   padding: 0.4rem 0.65rem;
-  color: #334155;
-  background: white;
+  color: var(--story-ink);
+  background: var(--story-surface);
+  font: inherit;
   cursor: pointer;
 }
 .story-toolbar-button:hover {
-  border-color: #8ba5ca;
+  border-color: light-dark(#8ba5ca, #64748b);
 }
 .story-avatar {
   display: inline-grid;
@@ -32,8 +61,8 @@ body {
   height: 1.75rem;
   place-items: center;
   border-radius: 999px;
-  color: #3730a3;
-  background: #e0e7ff;
+  color: light-dark(#3730a3, #c7d2fe);
+  background: light-dark(#e0e7ff, #312e81);
   font-size: 0.65rem;
   font-weight: 750;
 }
@@ -41,18 +70,18 @@ body {
   display: inline-flex;
   border-radius: 999px;
   padding: 0.15rem 0.45rem;
-  color: #166534;
-  background: #dcfce7;
+  color: light-dark(#166534, #bbf7d0);
+  background: light-dark(#dcfce7, #14532d);
   font-size: 0.72rem;
   font-weight: 650;
 }
 .story-status[data-status="Invited"] {
-  color: #92400e;
-  background: #fef3c7;
+  color: light-dark(#92400e, #fde68a);
+  background: light-dark(#fef3c7, #78350f);
 }
 .story-status[data-status="Paused"] {
-  color: #475569;
-  background: #e2e8f0;
+  color: light-dark(#475569, #cbd5e1);
+  background: light-dark(#e2e8f0, #334155);
 }
 .story-section {
   display: flex;
@@ -62,17 +91,20 @@ body {
   gap: 1rem;
 }
 .story-section span {
-  color: #475569;
+  color: var(--story-ink-muted);
   font-weight: 450;
 }
 .story-custom-header {
-  background: linear-gradient(90deg, #f5f3ff, #faf5ff);
+  background: light-dark(
+    linear-gradient(90deg, #f5f3ff, #faf5ff),
+    linear-gradient(90deg, #2e1065, #4c1d95)
+  );
 }
 .story-custom-footer {
-  background: #fafafa;
+  background: light-dark(#fafafa, #1e293b);
 }
 .story-custom-row:nth-child(2n) {
-  background: #fcfcff;
+  background: light-dark(#fcfcff, #16223d);
 }
 .story-density-stack {
   display: grid;
@@ -84,7 +116,7 @@ body {
   gap: 1rem;
 }
 .story-date-range-demo > code {
-  color: #475569;
+  color: var(--story-ink-muted);
   font-size: 0.75rem;
 }
 .story-loading-demo {
@@ -101,6 +133,43 @@ body {
   border-radius: 1rem;
   background: #111827;
 }
+.story-scheme-grid {
+  display: grid;
+  gap: 1.5rem;
+}
+.story-scheme-panel {
+  padding: 1rem;
+  border-radius: 1rem;
+  background: var(--story-page);
+}
+.story-scheme-panel h3 {
+  margin: 0 0 0.75rem;
+  color: var(--story-ink);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.story-token-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--story-ink);
+  font-size: 0.8125rem;
+  text-align: left;
+}
+.story-token-table th,
+.story-token-table td {
+  border-bottom: 1px solid var(--story-line);
+  padding: 0.4rem 0.6rem;
+  vertical-align: middle;
+}
+.story-token-swatch {
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--story-line);
+  border-radius: 0.35rem;
+  vertical-align: middle;
+}
 .story-tailwind-root {
   border-width: 2px;
   border-color: #8b5cf6;
@@ -108,10 +177,10 @@ body {
   box-shadow: 0 8px 30px rgb(76 29 149 / 0.12);
 }
 .story-tailwind-header {
-  background: #f5f3ff;
+  background: light-dark(#f5f3ff, #2e1065);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 .story-tailwind-row:hover {
-  background: #faf5ff;
+  background: light-dark(#faf5ff, #3b0764);
 }
