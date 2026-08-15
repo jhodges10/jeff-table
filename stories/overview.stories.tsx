@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 import { DataGrid, type DataGridProps, IndeterminateCheckbox } from "../src";
+import { defined } from "../src/test/defined";
 import { makePeople, type Person, people, personColumns } from "./fixtures";
 
 function PersonGrid(props: DataGridProps<Person>) {
@@ -97,7 +98,11 @@ export const KitchenSink: Story = {
     const search = canvas.getByRole("searchbox", { name: "Search records" });
     await userEvent.type(search, "Ada");
     await expect(search).toHaveValue("Ada");
-    await expect(canvas.getByText(/Ada/)).toBeVisible();
+    // "Ada" matches both the name and the email cell of every surviving row.
+    const matches = canvas.getAllByText(/Ada/);
+    await expect(matches.length).toBeGreaterThan(0);
+    await expect(defined(matches[0])).toBeVisible();
+    await expect(canvas.queryByText("Grace Hamilton")).not.toBeInTheDocument();
   },
 };
 

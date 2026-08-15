@@ -47,11 +47,13 @@ export const Sections: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const viewport = canvas.getByRole("region", { name: "Data grid rows" });
+    const viewport = defined(canvasElement.querySelector<HTMLElement>('[data-slot="viewport"]'));
     const engineeringCount = people.filter((person) => person.department === "Engineering").length;
-    const engineering = canvas
-      .getByText("Engineering")
-      .closest<HTMLElement>('[data-slot="section-header"]');
+    // Query the section by its key: "Engineering" is also a department cell
+    // value, so a text query matches many elements once rows are rendered.
+    const engineering = canvasElement.querySelector<HTMLElement>(
+      '[data-section-key="Engineering"]',
+    );
     await expect(engineering).toHaveAttribute("data-sticky", "true");
     const engineeringSelection = canvas.getByRole("checkbox", {
       name: "Select Engineering section",
@@ -63,19 +65,15 @@ export const Sections: Story = {
     viewport.scrollTop = (engineeringCount + 1) * 44 + 1;
     fireEvent.scroll(viewport);
     await waitFor(() => {
-      const finance = canvas
-        .getByText("Finance")
-        .closest<HTMLElement>('[data-slot="section-header"]');
+      const finance = canvasElement.querySelector<HTMLElement>('[data-section-key="Finance"]');
       expect(finance).toHaveAttribute("data-sticky", "true");
     });
 
     viewport.scrollTop = 0;
     fireEvent.scroll(viewport);
     await waitFor(() => {
-      const restoredEngineering = canvas
-        .getByText("Engineering")
-        .closest<HTMLElement>('[data-slot="section-header"]');
-      expect(restoredEngineering).toHaveAttribute("data-sticky", "true");
+      const restored = canvasElement.querySelector<HTMLElement>('[data-section-key="Engineering"]');
+      expect(restored).toHaveAttribute("data-sticky", "true");
     });
   },
 };

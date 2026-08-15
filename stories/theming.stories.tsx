@@ -24,6 +24,7 @@ type Story = StoryObj<typeof meta>;
 
 export const DarkTheme: Story = {
   args: {
+    colorScheme: "dark",
     enableColumnVisibility: true,
     theme: {
       accent: "#a78bfa",
@@ -61,6 +62,9 @@ export const DarkTheme: Story = {
 
 export const BrandTheme: Story = {
   args: {
+    // The palette below is a light brand, so the grid is pinned rather than
+    // left to follow a host page that might be dark.
+    colorScheme: "light",
     enableGlobalFilter: true,
     theme: {
       accent: "#0f766e",
@@ -77,6 +81,7 @@ export const BrandTheme: Story = {
 
 export const TailwindClassOverrides: Story = {
   args: {
+    colorScheme: "light",
     classNames: {
       columnHeader: "story-tailwind-header",
       root: "story-tailwind-root",
@@ -99,7 +104,7 @@ export const DensityVariants: Story = {
     <div className="story-density-stack">
       {(["compact", "comfortable", "spacious"] as const).map((density) => (
         <section key={density}>
-          <h3>{density}</h3>
+          <h2>{density}</h2>
           <PersonGrid
             {...args}
             data={people.slice(0, 4)}
