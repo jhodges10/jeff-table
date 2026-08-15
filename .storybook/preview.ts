@@ -45,7 +45,7 @@ const preview: Preview = {
   parameters: {
     controls: { expanded: true },
     layout: "padded",
-    a11y: { test: "todo" },
+    a11y: { test: "error" },
     options: {
       storySort: {
         order: [

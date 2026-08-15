@@ -64,7 +64,7 @@
     --jt-background: var(--background, light-dark(#fff, #0f172a));
     --jt-foreground: var(--foreground, light-dark(#0f172a, #e2e8f0));
     --jt-muted: var(--muted, light-dark(#f1f5f9, #1e293b));
-    --jt-muted-foreground: var(--muted-foreground, light-dark(#64748b, #94a3b8));
+    --jt-muted-foreground: var(--muted-foreground, light-dark(#475569, #94a3b8));
     --jt-border: var(--border, light-dark(#e2e8f0, #334155));
     --jt-danger: var(--destructive, light-dark(#dc2626, #f87171));
 
@@ -186,6 +186,11 @@
     min-width: 0;
     min-height: 5.5rem;
     flex-direction: column;
+  }
+
+  /* Carries role="grid" without adding a box: the shell keeps owning layout. */
+  .jt-grid__grid {
+    display: contents;
   }
 
   .jt-grid__column-header-viewport {
@@ -851,6 +856,8 @@
     --rdp-nav_button-height: 2rem;
     --rdp-nav_button-width: 2rem;
     --rdp-nav-height: 2.25rem;
+    /* The vendor default is 0.75, which puts the weekday letters under 4.5:1. */
+    --rdp-weekday-opacity: 1;
     margin: 0;
     padding: 0.75rem;
   }
@@ -870,6 +877,11 @@
   }
   .jt-date-range-calendar .rdp-day_button:hover {
     background: var(--jt-hover, #f8fafc);
+  }
+  /* A selected day carried in from the neighbouring month is still a value
+     someone has to read, so it keeps full contrast. */
+  .jt-date-range-calendar .rdp-outside.rdp-selected {
+    opacity: 1;
   }
   .jt-date-range-calendar .rdp-today:not(.rdp-selected) .rdp-day_button {
     box-shadow: inset 0 0 0 1px var(--jt-accent, #2563eb);
@@ -1073,7 +1085,9 @@
     background: var(--jt-selected);
   }
   .jt-grid__row[data-disabled="true"] {
-    opacity: 0.65;
+    /* Dim enough to read as unselectable, not so far that the row's own data
+       drops below the contrast floor — the values still have to be legible. */
+    opacity: 0.85;
   }
   .jt-grid__row:focus-visible {
     z-index: 2;
@@ -1219,6 +1233,10 @@
   }
   .jt-skeleton[data-shape="square"] {
     border-radius: 0.35rem;
+  }
+  .jt-grid__state-row {
+    display: grid;
+    width: 100%;
   }
   .jt-grid__state {
     display: grid;

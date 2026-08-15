@@ -80,7 +80,7 @@ body {
   background: light-dark(#fef3c7, #78350f);
 }
 .story-status[data-status="Paused"] {
-  color: light-dark(#475569, #cbd5e1);
+  color: light-dark(#334155, #cbd5e1);
   background: light-dark(#e2e8f0, #334155);
 }
 .story-section {
@@ -124,7 +124,7 @@ body {
   justify-items: start;
   gap: 0.75rem;
 }
-.story-density-stack h3 {
+.story-density-stack h2 {
   margin: 0 0 0.5rem;
   font-size: 0.875rem;
 }

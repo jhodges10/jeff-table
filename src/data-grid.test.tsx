@@ -96,7 +96,7 @@ describe("DataGrid", () => {
       <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
     );
     const grid = screen.getByRole("grid", { name: "Data grid" });
-    const rowsViewport = screen.getByRole("region", { name: "Data grid rows" });
+    const rowsViewport = defined(document.querySelector<HTMLElement>('[data-slot="viewport"]'));
     const header = screen.getByRole("columnheader", { name: /Name/ });
     const headerViewport = container.querySelector('[data-slot="column-header-viewport"]');
     const headerCanvas = container.querySelector<HTMLElement>(".jt-grid__header-canvas");
@@ -228,7 +228,7 @@ describe("DataGrid", () => {
           totalCount={groupedRows.length}
         />,
       );
-      const viewport = screen.getByRole("region", { name: "Data grid rows" });
+      const viewport = defined(container.querySelector<HTMLElement>('[data-slot="viewport"]'));
       const groupA = (await screen.findByText("Group A")).closest('[data-slot="section-header"]');
       expect(groupA).toHaveAttribute("data-sticky", "true");
       const firstNestedRow = container.querySelector<HTMLElement>('[data-row-id="0"]');
@@ -706,6 +706,49 @@ describe("DataGrid", () => {
 
     expect(grid.style.getPropertyValue("--jt-accent")).toBe("oklch(0.6 0.2 250)");
     expect(grid.style.getPropertyValue("--jt-background")).toBe("");
+  });
+
+  it("keeps the grid role's children valid for assistive technology", () => {
+    const { container } = render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableColumnVisibility
+        totalCount={3}
+        virtualize={false}
+      />,
+    );
+    const grid = screen.getByRole("grid", { name: "Data grid" });
+
+    // A grid may only own rows and rowgroups. The column menu is a `details`
+    // element and the viewport is focusable, so neither may sit inside it.
+    expect(container.querySelector(".jt-grid__column-tools")).not.toBeNull();
+    expect(grid.querySelector(".jt-grid__column-tools")).toBeNull();
+    expect(grid.querySelectorAll('[role="rowgroup"]')).toHaveLength(2);
+    for (const rowgroup of grid.querySelectorAll('[role="rowgroup"]')) {
+      expect(rowgroup.querySelector('[role="row"]')).not.toBeNull();
+    }
+    // The scrollable viewport stays keyboard reachable without taking a role
+    // that ARIA forbids between a grid and its rows.
+    const viewport = defined(container.querySelector<HTMLElement>('[data-slot="viewport"]'));
+    expect(viewport.tabIndex).toBe(0);
+    expect(viewport).toHaveAttribute("role", "rowgroup");
+  });
+
+  it("renders empty and error states as rows so the rowgroup stays valid", () => {
+    const { rerender } = render(
+      <DataGrid columns={columns} data={[]} emptyMessage="Nothing here." totalCount={0} />,
+    );
+    expect(screen.getByText("Nothing here.")).toHaveAttribute("role", "gridcell");
+    expect(screen.getByText("Nothing here.").closest('[role="row"]')).not.toBeNull();
+
+    rerender(
+      <DataGrid columns={columns} data={[]} error={new Error("Service down.")} totalCount={0} />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Service down.");
+    expect(alert.closest('[role="gridcell"]')).not.toBeNull();
+    expect(alert.closest('[role="row"]')).not.toBeNull();
   });
 
   it("inherits the host colour scheme until one is pinned", () => {
