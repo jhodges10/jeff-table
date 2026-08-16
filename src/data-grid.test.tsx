@@ -709,6 +709,59 @@ describe("DataGrid", () => {
     expect(grid.style.getPropertyValue("--jt-background")).toBe("");
   });
 
+  it("sizes the row canvas from the column tracks, not from row content", () => {
+    // jsdom lays nothing out, so rows only exist here without virtualization.
+    // The real layout consequence is covered by a browser story test.
+    const { container } = render(
+      <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
+    );
+    const sizer = defined(container.querySelector<HTMLElement>('[data-slot="track-sizer"]'));
+    const row = defined(container.querySelector<HTMLElement>("[data-row-id]"));
+    const headerRow = defined(container.querySelector<HTMLElement>(".jt-grid__column-header-row"));
+
+    // Virtualized rows are absolutely positioned and contribute nothing to the
+    // canvas's intrinsic width. The sizer is the one in-flow element that does,
+    // and it must carry exactly the same tracks as the rows and the header.
+    expect(sizer.style.gridTemplateColumns).toBe(row.style.gridTemplateColumns);
+    expect(sizer.style.gridTemplateColumns).toBe(headerRow.style.gridTemplateColumns);
+    expect(sizer.children).toHaveLength(columns.length);
+    expect(sizer).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("gives the track sizer a cell for the selection column too", () => {
+    const { container } = render(
+      <DataGrid
+        columns={columns}
+        data={rows}
+        enableRowSelection
+        getRowId={(row) => row.id}
+        totalCount={3}
+      />,
+    );
+    const sizer = defined(container.querySelector<HTMLElement>('[data-slot="track-sizer"]'));
+
+    expect(sizer.children).toHaveLength(columns.length + 1);
+    expect(sizer.style.gridTemplateColumns.startsWith("44px ")).toBe(true);
+  });
+
+  it("carries a column's minWidth into its CSS track", () => {
+    const flexibleColumns: DataGridColumnDef<TestPerson>[] = [
+      { accessorKey: "name", header: "Name", meta: { minWidth: 220, width: "1.5fr" } },
+      {
+        accessorKey: "email",
+        header: "Email",
+        meta: { width: "minmax(300px, 2fr)", minWidth: 90 },
+      },
+      { accessorKey: "team", header: "Team", meta: { width: "100px" } },
+    ];
+    const { container } = render(<DataGrid columns={flexibleColumns} data={rows} totalCount={3} />);
+    const sizer = defined(container.querySelector<HTMLElement>('[data-slot="track-sizer"]'));
+
+    // Without this a flexible track floors at zero and the column disappears
+    // the moment the viewport is narrower than the table.
+    expect(sizer.style.gridTemplateColumns).toBe("minmax(220px, 1.5fr) minmax(300px, 2fr) 100px");
+  });
+
   it("keeps the grid role's children valid for assistive technology", () => {
     const { container } = render(
       <DataGrid

@@ -248,3 +248,65 @@ export const RememberAndResetColumnPreferences: Story = {
     await expect(window.localStorage.getItem(storageKey)).toBeNull();
   },
 };
+
+export const NarrowContainerKeepsColumnsAligned: Story = {
+  args: {
+    data: people.slice(0, 30),
+    enableColumnFiltering: true,
+    height: 420,
+    totalCount: 30,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "A container narrower than the table's natural width. Virtualized rows are absolutely positioned, so they contribute nothing to the canvas's intrinsic width — without the in-flow track sizer the canvas collapses to the container and every row resolves the shared tracks against its own content, which is what produced ragged rows and a squeezed header on phones.",
+      },
+    },
+  },
+  render: (args) => (
+    <div className="story-narrow-frame">
+      <p className="story-note">
+        360px frame — the grid scrolls horizontally instead of squeezing.
+      </p>
+      <PersonGrid {...args} />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const grid = canvas.getByTestId("data-grid");
+    const rows = [...canvasElement.querySelectorAll<HTMLElement>("[data-row-id]")];
+    const headerRow = defined(
+      canvasElement.querySelector<HTMLElement>(".jt-grid__column-header-row"),
+    );
+    const width = (element: Element) => Math.round(element.getBoundingClientRect().width);
+
+    await expect(rows.length).toBeGreaterThan(1);
+
+    // Every row is exactly as wide as every other, whatever it contains.
+    const distinctWidths = new Set(rows.map(width));
+    await expect([...distinctWidths]).toHaveLength(1);
+
+    // And the canvas is wider than the frame, so the grid scrolls rather than
+    // compressing the columns to fit.
+    const canvasWidth = width(defined(grid.querySelector(".jt-grid__rows-canvas")));
+    const viewport = defined(grid.querySelector<HTMLElement>('[data-slot="viewport"]'));
+    await expect(canvasWidth).toBe(width(defined(rows[0])));
+    await expect(canvasWidth).toBeGreaterThan(width(viewport));
+
+    // Header and cells resolve the identical template, so nothing drifts.
+    const firstRow = defined(rows[0]);
+    await expect(getComputedStyle(headerRow).gridTemplateColumns).toBe(
+      getComputedStyle(firstRow).gridTemplateColumns,
+    );
+    const cells = [...firstRow.querySelectorAll<HTMLElement>(".jt-grid__cell")];
+    const headers = [...canvasElement.querySelectorAll<HTMLElement>("[data-column-header]")];
+    for (const [index, header] of headers.entries()) {
+      const cell = cells[index];
+      if (!cell) continue;
+      await expect(Math.round(header.getBoundingClientRect().left)).toBe(
+        Math.round(cell.getBoundingClientRect().left),
+      );
+    }
+  },
+};
