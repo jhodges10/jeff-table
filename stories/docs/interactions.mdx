@@ -79,3 +79,18 @@ record rather than overwriting it with today's defaults, so an app that later
 changes its defaults is not out-voted by a saved copy of the old ones.
 
 <Canvas of={InteractionStories.RememberAndResetColumnPreferences} />
+
+## Narrow containers
+
+The tracks a grid renders are decided once and shared by the header band and
+every row. Virtualized rows are absolutely positioned, so they contribute
+nothing to the canvas's intrinsic width; a hidden, in-flow track sizer supplies
+it instead. Without that, a container narrower than the table's natural width
+leaves each row resolving the shared template against its own content — ragged
+rows and a squeezed header, on phones especially.
+
+Below the sum of the column minimums the grid scrolls horizontally rather than
+compressing columns, which is also why `meta.minWidth` is written into the CSS
+track: a flexible `1fr` column floors at zero otherwise.
+
+<Canvas of={InteractionStories.NarrowContainerKeepsColumnsAligned} />

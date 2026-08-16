@@ -99,7 +99,14 @@ function resolveTrack<TData extends RowData>(
   enableColumnResizing: boolean,
 ): string {
   if (enableColumnResizing) return `${column.getSize()}px`;
-  return column.columnDef.meta?.width ?? `${column.getSize()}px`;
+
+  const meta = column.columnDef.meta;
+  const width = meta?.width ?? `${column.getSize()}px`;
+  // A flexible track floors at zero unless it is told otherwise, so `minWidth`
+  // has to reach the CSS track — without it a `1fr` column collapses to nothing
+  // as soon as the viewport is narrower than the table.
+  if (meta?.minWidth === undefined || width.startsWith("minmax(")) return width;
+  return `minmax(${meta.minWidth}px, ${width})`;
 }
 
 function renderSlot<TData extends RowData>(
@@ -708,6 +715,26 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                 data-slot="body"
                 style={{ height: bodyHeight }}
               >
+                {/*
+                  Virtualized rows are absolutely positioned, so they contribute
+                  nothing to the canvas's intrinsic width and it collapses to the
+                  viewport — leaving every row to resolve the shared track
+                  template against its own content. This in-flow, zero-height row
+                  carries no content, so its width is exactly the sum of the
+                  track minimums: the narrowest the grid may be, and the one
+                  width every row and the header band then agree on.
+                */}
+                <div
+                  aria-hidden="true"
+                  className="jt-grid__track-sizer"
+                  data-slot="track-sizer"
+                  style={{ gridTemplateColumns: gridTemplate }}
+                >
+                  {props.enableRowSelection ? <span /> : null}
+                  {visibleColumns.map((column) => (
+                    <span key={column.id} />
+                  ))}
+                </div>
                 {props.error ? (
                   // A rowgroup may only contain rows, so a state message is a
                   // full-width cell rather than a bare div inside the body.

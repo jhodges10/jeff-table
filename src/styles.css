@@ -264,7 +264,16 @@
   .jt-grid__row {
     display: grid;
     width: 100%;
+  }
+
+  /* See the note beside `jt-grid__track-sizer` in data-grid.tsx. */
+  .jt-grid__track-sizer {
+    display: grid;
+    width: 100%;
     min-width: max-content;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
   }
 
   .jt-grid__column-header,
@@ -1194,7 +1203,6 @@
     left: 0;
     display: grid;
     width: 100%;
-    min-width: max-content;
     border-top: 1px solid var(--jt-grid-line);
     border-bottom: 1px solid var(--jt-grid-line);
     background: var(--jt-section-background);
