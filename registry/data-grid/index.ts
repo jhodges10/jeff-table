@@ -45,6 +45,7 @@ export type {
   DataGridPreferences,
   DataGridProps,
   DataGridRenderContext,
+  DataGridScrollbar,
   DataGridSectionSelectionContext,
   DataGridSections,
   DataGridSelectionProps,

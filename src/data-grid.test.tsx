@@ -34,6 +34,40 @@ const columns: DataGridColumnDef<TestPerson>[] = [
   { accessorKey: "team", header: "Team", meta: { width: "100px" } },
 ];
 
+function mockViewportOverflow(box: {
+  clientHeight: number;
+  clientWidth: number;
+  scrollHeight: number;
+  scrollWidth: number;
+}) {
+  const isViewport = (element: HTMLElement) => element.classList.contains("jt-grid__viewport");
+  const spies = [
+    vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockImplementation(function viewportHeight(this: HTMLElement) {
+        return isViewport(this) ? box.clientHeight : 0;
+      }),
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function viewportWidth(
+      this: HTMLElement,
+    ) {
+      return isViewport(this) ? box.clientWidth : 0;
+    }),
+    vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockImplementation(function viewportScrollHeight(this: HTMLElement) {
+        return isViewport(this) ? box.scrollHeight : 0;
+      }),
+    vi
+      .spyOn(HTMLElement.prototype, "scrollWidth", "get")
+      .mockImplementation(function viewportScrollWidth(this: HTMLElement) {
+        return isViewport(this) ? box.scrollWidth : 0;
+      }),
+  ];
+  return () => {
+    for (const spy of spies) spy.mockRestore();
+  };
+}
+
 interface FilterRecord {
   active: boolean;
   amount: number;
@@ -414,7 +448,9 @@ describe("DataGrid", () => {
     expect(redFilter).toHaveClass("jt-check__input");
     expect(redFilter.closest(".jt-check")).toHaveAttribute("data-state", "unchecked");
     await user.click(redFilter);
-    expect(redFilter.closest(".jt-check")).toHaveAttribute("data-state", "checked");
+    expect(tagsDetails).not.toHaveAttribute("open");
+    expect(screen.queryByRole("checkbox", { name: "Red" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(document.body);
     expect(screen.getByText("75")).toBeVisible();
 
     const amountSummary = screen.getByLabelText("Filter amount");
@@ -787,6 +823,70 @@ describe("DataGrid", () => {
     const viewport = defined(container.querySelector<HTMLElement>('[data-slot="viewport"]'));
     expect(viewport.tabIndex).toBe(0);
     expect(viewport).toHaveAttribute("role", "rowgroup");
+    expect(screen.getByTestId("data-grid")).toHaveAttribute("data-scrollbar", "overlay");
+    expect(grid.querySelector('[data-slot="overlay-scrollbars"]')).toBeNull();
+    expect(container.querySelector('[data-slot="overlay-scrollbars"]')).not.toBeNull();
+  });
+
+  it("overlays inset scrollbars when the rows overflow", () => {
+    const restore = mockViewportOverflow({
+      clientHeight: 200,
+      clientWidth: 400,
+      scrollHeight: 800,
+      scrollWidth: 400,
+    });
+    try {
+      const { container } = render(
+        <DataGrid columns={columns} data={rows} totalCount={3} virtualize={false} />,
+      );
+      const grid = screen.getByRole("grid", { name: "Data grid" });
+      const vertical = defined(
+        container.querySelector<HTMLElement>('[data-slot="overlay-scrollbar-vertical"]'),
+      );
+      const thumb = defined(
+        vertical.querySelector<HTMLElement>(".jt-grid__overlay-scrollbar-thumb"),
+      );
+      const viewport = defined(container.querySelector<HTMLElement>('[data-slot="viewport"]'));
+
+      expect(grid.contains(vertical)).toBe(false);
+      expect(screen.getByTestId("data-grid")).toHaveAttribute("data-scrollbar", "overlay");
+      expect(vertical.hidden).toBe(false);
+      expect(
+        container.querySelector<HTMLElement>('[data-slot="overlay-scrollbar-horizontal"]')?.hidden,
+      ).toBe(true);
+      expect(thumb.style.height).toBe("48px");
+
+      viewport.scrollTop = 300;
+      fireEvent.scroll(viewport);
+      expect(thumb.style.transform).toBe("translate3d(0, 72px, 0)");
+    } finally {
+      restore();
+    }
+  });
+
+  it("keeps native viewport scrollbars when configured", () => {
+    const restore = mockViewportOverflow({
+      clientHeight: 200,
+      clientWidth: 400,
+      scrollHeight: 800,
+      scrollWidth: 400,
+    });
+    try {
+      const { container } = render(
+        <DataGrid
+          columns={columns}
+          data={rows}
+          scrollbar="native"
+          totalCount={3}
+          virtualize={false}
+        />,
+      );
+
+      expect(screen.getByTestId("data-grid")).toHaveAttribute("data-scrollbar", "native");
+      expect(container.querySelector('[data-slot="overlay-scrollbars"]')).toBeNull();
+    } finally {
+      restore();
+    }
   });
 
   it("renders empty and error states as rows so the rowgroup stays valid", () => {

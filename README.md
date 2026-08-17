@@ -366,6 +366,14 @@ Dark mode is not verified by eye: `bun run test:storybook` runs the whole story
 suite in Chromium twice, once against a light host page and once against a dark
 one, with axe assertions on both passes.
 
+## Scrollbars
+
+Viewport scrolling is overlay by default: inset thumbs sit on the rows instead of reserving an OS gutter. Pass `scrollbar="native"` for platform scrollbars — styled to the grid tokens on Chromium, thin on Firefox.
+
+```tsx
+<DataGrid scrollbar="native" /> // "overlay" (default) | "native"
+```
+
 ## Performance
 
 The grid renders a window, not a table, so a 50,000-row grid commits the same

@@ -12,6 +12,13 @@ import type { DataGridColumnDef, DataGridInstance, DataGridRow } from "./feature
 
 export type DataGridAlignment = "left" | "center" | "right";
 export type DataGridDensity = "compact" | "comfortable" | "spacious";
+/**
+ * How the viewport paints overflow.
+ *
+ * - `overlay` (default) hides the OS gutter and draws inset thumbs on the rows.
+ * - `native` keeps platform scrollbars, styled to the grid tokens on Chromium.
+ */
+export type DataGridScrollbar = "native" | "overlay";
 
 export interface DataGridFilterOption {
   label: string;
@@ -247,6 +254,7 @@ export interface DataGridBaseProps<TData extends RowData> {
   rowClassName?: string | ((row: DataGridRow<TData>) => string | undefined);
   rowHeight?: number;
   searchPlaceholder?: string;
+  scrollbar?: DataGridScrollbar;
   sections?: DataGridSections<TData>;
   showFooter?: boolean;
   skeletonRowCount?: number;

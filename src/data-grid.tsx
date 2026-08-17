@@ -14,6 +14,7 @@ import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
 import { DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
 import { DataGridFiltersMenu, InlineFilter } from "./inline-filter";
+import { OverlayScrollbars } from "./overlay-scrollbar";
 import { createThemeStyle } from "./theme";
 import type { DataGridProps, DataGridRenderContext, DataGridSlot } from "./types";
 import { useColumnReordering } from "./use-column-reordering";
@@ -186,6 +187,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     overscan = 10,
     rowHeight: rowHeightProp,
     searchPlaceholder = "Search records…",
+    scrollbar = "overlay",
     sections,
     showFooter = true,
     skeletonRowCount,
@@ -456,6 +458,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
       data-color-scheme={colorScheme === "inherit" ? undefined : colorScheme}
       data-density={density}
       data-loading={isLoading || isLoadingMore || undefined}
+      data-scrollbar={scrollbar}
       data-testid={testId}
       style={themeStyle}
     >
@@ -596,26 +599,6 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                           }}
                         >
                           <div className="jt-grid__column-title-row">
-                            {isLeaf && drag.draggable ? (
-                              <button
-                                aria-label={`Move ${header.column.id} column`}
-                                className="jt-grid__drag-handle"
-                                draggable
-                                onDragEnd={drag.onDragEnd}
-                                onDragStart={drag.onDragStart}
-                                onKeyDown={(event) => {
-                                  if (!event.altKey) return;
-                                  if (event.key === "ArrowLeft")
-                                    reorder.moveBy(header.column.id, -1);
-                                  if (event.key === "ArrowRight")
-                                    reorder.moveBy(header.column.id, 1);
-                                }}
-                                title="Drag to reorder; Alt+Arrow keys also move this column"
-                                type="button"
-                              >
-                                <DragIcon />
-                              </button>
-                            ) : null}
                             {header.isPlaceholder ? null : header.column.getCanSort() ? (
                               <button
                                 className="jt-grid__sort-button"
@@ -632,31 +615,53 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                                 {flexRender(header.column.columnDef.header, header.getContext())}
                               </div>
                             )}
-                            {meta?.headerTooltip ? (
-                              <button
-                                aria-label={`About ${header.column.id}`}
-                                className="jt-grid__header-tooltip"
-                                type="button"
-                              >
-                                <span aria-hidden="true">?</span>
-                                <span className="jt-grid__header-tooltip-content" role="tooltip">
-                                  {meta.headerTooltip}
-                                </span>
-                              </button>
-                            ) : null}
-                            {enableColumnFiltering && isLeaf && meta?.filter ? (
-                              <div className={cx("jt-grid__filter", classNames.filter)}>
-                                <InlineFilter
-                                  column={header.column}
-                                  config={meta.filter}
-                                  onOpenChange={(open) =>
-                                    handlePopoverChange(`filter-${header.column.id}`, open)
-                                  }
-                                  open={openPopover === `filter-${header.column.id}`}
-                                  popoverGroup={popoverGroup}
-                                />
-                              </div>
-                            ) : null}
+                            <div className="jt-grid__header-controls">
+                              {isLeaf && drag.draggable ? (
+                                <button
+                                  aria-label={`Move ${header.column.id} column`}
+                                  className="jt-grid__drag-handle"
+                                  draggable
+                                  onDragEnd={drag.onDragEnd}
+                                  onDragStart={drag.onDragStart}
+                                  onKeyDown={(event) => {
+                                    if (!event.altKey) return;
+                                    if (event.key === "ArrowLeft")
+                                      reorder.moveBy(header.column.id, -1);
+                                    if (event.key === "ArrowRight")
+                                      reorder.moveBy(header.column.id, 1);
+                                  }}
+                                  title="Drag to reorder; Alt+Arrow keys also move this column"
+                                  type="button"
+                                >
+                                  <DragIcon />
+                                </button>
+                              ) : null}
+                              {meta?.headerTooltip ? (
+                                <button
+                                  aria-label={`About ${header.column.id}`}
+                                  className="jt-grid__header-tooltip"
+                                  type="button"
+                                >
+                                  <span aria-hidden="true">?</span>
+                                  <span className="jt-grid__header-tooltip-content" role="tooltip">
+                                    {meta.headerTooltip}
+                                  </span>
+                                </button>
+                              ) : null}
+                              {enableColumnFiltering && isLeaf && meta?.filter ? (
+                                <div className={cx("jt-grid__filter", classNames.filter)}>
+                                  <InlineFilter
+                                    column={header.column}
+                                    config={meta.filter}
+                                    onOpenChange={(open) =>
+                                      handlePopoverChange(`filter-${header.column.id}`, open)
+                                    }
+                                    open={openPopover === `filter-${header.column.id}`}
+                                    popoverGroup={popoverGroup}
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                           {enableColumnResizing && isLeaf && meta?.resizable !== false ? (
                             <button
@@ -991,6 +996,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
             </div>
           </div>
         </div>
+        {scrollbar === "overlay" ? <OverlayScrollbars viewportRef={scrollReference} /> : null}
       </div>
 
       {showFooter ? (

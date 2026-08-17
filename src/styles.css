@@ -202,6 +202,11 @@
     flex: none;
     overflow-x: clip;
     overflow-y: visible;
+    /* The header is a sibling of the scrolling viewport, so this band paints
+       its own background across the full shell width — including the native
+       scrollbar gutter, when that mode is selected. */
+    background: var(--jt-header-background);
+    box-shadow: 0 1px 0 var(--jt-grid-line);
   }
 
   .jt-grid__viewport {
@@ -211,30 +216,46 @@
     flex: 1;
     overflow: auto;
     outline: none;
-    scrollbar-color: var(--jt-scrollbar-thumb) transparent;
-    scrollbar-width: thin;
   }
-  .jt-grid__viewport::-webkit-scrollbar {
-    width: 0.625rem;
-    height: 0.625rem;
+  .jt-grid[data-scrollbar="overlay"] .jt-grid__viewport {
+    scrollbar-width: none;
   }
-  .jt-grid__viewport::-webkit-scrollbar-track,
-  .jt-grid__viewport::-webkit-scrollbar-corner {
+  .jt-grid[data-scrollbar="overlay"] .jt-grid__viewport::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * Firefox has no ::-webkit-scrollbar. Chromium does, but setting
+   * `scrollbar-width` there disables the webkit pseudo-elements and falls
+   * back to the OS scrollbar — thick, square, and unthemed on Windows.
+   */
+  @supports not selector(::-webkit-scrollbar) {
+    .jt-grid[data-scrollbar="native"] .jt-grid__viewport {
+      scrollbar-color: var(--jt-scrollbar-thumb) transparent;
+      scrollbar-width: thin;
+    }
+  }
+  .jt-grid[data-scrollbar="native"] .jt-grid__viewport::-webkit-scrollbar {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+  .jt-grid[data-scrollbar="native"] .jt-grid__viewport::-webkit-scrollbar-track,
+  .jt-grid[data-scrollbar="native"] .jt-grid__viewport::-webkit-scrollbar-corner {
     background: transparent;
   }
-  .jt-grid__viewport::-webkit-scrollbar-thumb {
+  .jt-grid[data-scrollbar="native"] .jt-grid__viewport::-webkit-scrollbar-thumb {
     min-width: 2.5rem;
     min-height: 2.5rem;
-    border: 2px solid transparent;
+    border: 3px solid transparent;
     border-radius: 999px;
     background: var(--jt-scrollbar-thumb);
     background-clip: padding-box;
   }
-  .jt-grid__viewport::-webkit-scrollbar-thumb:hover {
+  .jt-grid[data-scrollbar="native"] .jt-grid__viewport::-webkit-scrollbar-thumb:hover {
     background: var(--jt-scrollbar-thumb-hover);
     background-clip: padding-box;
   }
-  .jt-grid__viewport::-webkit-scrollbar-button {
+  .jt-grid[data-scrollbar="native"] .jt-grid__viewport::-webkit-scrollbar-button {
     display: none;
     width: 0;
     height: 0;
@@ -242,6 +263,42 @@
 
   .jt-grid__viewport:focus-visible {
     box-shadow: inset 0 0 0 2px var(--jt-focus-ring);
+  }
+
+  .jt-grid__overlay-scrollbars {
+    position: absolute;
+    z-index: 6;
+    inset: 0;
+    pointer-events: none;
+  }
+  .jt-grid__overlay-scrollbar {
+    position: absolute;
+    pointer-events: none;
+  }
+  .jt-grid__overlay-scrollbar--vertical {
+    width: 12px;
+  }
+  .jt-grid__overlay-scrollbar--horizontal {
+    height: 12px;
+  }
+  .jt-grid__overlay-scrollbar-thumb {
+    position: absolute;
+    border-radius: 999px;
+    background: var(--jt-scrollbar-thumb);
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+  }
+  .jt-grid__overlay-scrollbar--vertical .jt-grid__overlay-scrollbar-thumb {
+    inset-inline: 2.5px;
+  }
+  .jt-grid__overlay-scrollbar--horizontal .jt-grid__overlay-scrollbar-thumb {
+    top: 2.5px;
+    bottom: 2.5px;
+  }
+  .jt-grid__overlay-scrollbar-thumb:hover,
+  .jt-grid__overlay-scrollbar-thumb[data-dragging="true"] {
+    background: var(--jt-scrollbar-thumb-hover);
   }
   .jt-grid__canvas {
     position: relative;
@@ -257,7 +314,6 @@
     width: 100%;
     min-width: max-content;
     background: var(--jt-header-background);
-    box-shadow: 0 1px 0 var(--jt-grid-line);
   }
 
   .jt-grid__column-header-row,
@@ -339,6 +395,7 @@
   }
   .jt-grid__column-label {
     min-width: 0;
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -370,10 +427,18 @@
   }
   .jt-grid__drag-handle {
     width: 1.25rem;
-    margin-left: -0.375rem;
+    margin: 0;
     padding: 0;
     opacity: 0;
     cursor: grab;
+  }
+  .jt-grid__header-controls {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    margin-left: auto;
   }
   .jt-grid__column-header:hover .jt-grid__drag-handle,
   .jt-grid__drag-handle:focus-visible {
@@ -469,7 +534,6 @@
     position: relative;
     display: inline-flex;
     flex: 0 0 auto;
-    margin-left: auto;
   }
   .jt-search input {
     width: 100%;
@@ -808,18 +872,22 @@
     overflow-y: auto;
     border-right: 1px solid var(--jt-border, #e2e8f0);
     padding: 0.5rem;
-    scrollbar-color: var(--jt-scrollbar-thumb, color-mix(in srgb, #64748b 40%, transparent))
-      transparent;
-    scrollbar-width: thin;
+  }
+  @supports not selector(::-webkit-scrollbar) {
+    .jt-date-range-panel__presets {
+      scrollbar-color: var(--jt-scrollbar-thumb, color-mix(in srgb, #64748b 40%, transparent))
+        transparent;
+      scrollbar-width: thin;
+    }
   }
   .jt-date-range-panel__presets::-webkit-scrollbar {
-    width: 0.5rem;
+    width: 0.75rem;
   }
   .jt-date-range-panel__presets::-webkit-scrollbar-track {
     background: transparent;
   }
   .jt-date-range-panel__presets::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
+    border: 3px solid transparent;
     border-radius: 999px;
     background: var(--jt-scrollbar-thumb, color-mix(in srgb, #64748b 45%, transparent));
     background-clip: padding-box;
@@ -972,8 +1040,17 @@
     outline: none;
   }
   .jt-filters-menu__popover {
+    --jt-filters-menu-width: 18.5rem;
     top: calc(100% + 0.25rem);
-    min-width: 15rem;
+    width: min(var(--jt-filters-menu-width), calc(100vw - 2rem));
+    min-width: 0;
+  }
+  .jt-filters-menu__popover:not(.jt-filter__popover--date) > .jt-filter-editor {
+    width: 100%;
+    min-width: 0;
+  }
+  .jt-filters-menu__popover.jt-filter__popover--date {
+    width: max-content;
   }
   .jt-filters-menu__columns {
     padding: 0.375rem;
