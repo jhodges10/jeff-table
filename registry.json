@@ -63,6 +63,11 @@
           "target": "@ui/jeff-table/filtering.ts"
         },
         {
+          "path": "src/overlay-scrollbar.tsx",
+          "type": "registry:ui",
+          "target": "@ui/jeff-table/overlay-scrollbar.tsx"
+        },
+        {
           "path": "src/preferences.ts",
           "type": "registry:lib",
           "target": "@ui/jeff-table/preferences.ts"

@@ -76,3 +76,15 @@ code path: `compact` tightens `--jt-cell-padding-block` and `--jt-font-size`,
 height (36 / 44 / 52px), which `rowHeight` overrides.
 
 <Canvas of={ThemeStories.DensityVariants} />
+
+## Scrollbars
+
+`scrollbar` chooses how the viewport paints overflow. `overlay` (the default)
+hides the OS gutter and draws inset thumbs on the rows. `native` keeps platform
+scrollbars, styled to the grid tokens on Chromium.
+
+```tsx
+<DataGrid scrollbar="native" />
+```
+
+<Canvas of={ThemeStories.ScrollbarVariants} />

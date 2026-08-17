@@ -117,3 +117,16 @@ export const DensityVariants: Story = {
     </div>
   ),
 };
+
+export const ScrollbarVariants: Story = {
+  render: (args) => (
+    <div className="story-density-stack">
+      {(["overlay", "native"] as const).map((scrollbar) => (
+        <section key={scrollbar}>
+          <h2>{scrollbar}</h2>
+          <PersonGrid {...args} height={280} scrollbar={scrollbar} />
+        </section>
+      ))}
+    </div>
+  ),
+};

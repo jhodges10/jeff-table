@@ -47,6 +47,11 @@ describe("design tokens", () => {
     expect(undeclared).toEqual([]);
   });
 
+  it("paints the column header band across the full viewport width", () => {
+    const viewportRule = stylesheet.match(/\.jt-grid__column-header-viewport\s*\{[^}]+\}/)?.[0];
+    expect(viewportRule).toContain("background: var(--jt-header-background)");
+  });
+
   it("gives every built-in colour a light and a dark value", () => {
     const scheme = ["dark", "light", "light dark"];
     for (const value of scheme) expect(stylesheet).toContain(`color-scheme: ${value};`);

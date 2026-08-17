@@ -104,6 +104,15 @@ export const InlineFilters: Story = {
     await userEvent.click(within(defined(menu)).getByRole("button", { name: "Clear all filters" }));
     await expect(canvas.getAllByText("Grace Hamilton").length).toBeGreaterThan(0);
     await userEvent.click(filtersMenu);
+
+    const departmentFilter = canvas.getByLabelText("Filter department");
+    const departmentMenu = defined(departmentFilter.closest("details"));
+    await userEvent.click(departmentFilter);
+    const engineering = canvas.getByRole("checkbox", { name: "Engineering" });
+    await userEvent.click(engineering);
+    await expect(departmentMenu).not.toHaveAttribute("open");
+    await expect(canvas.queryByRole("checkbox", { name: "Engineering" })).not.toBeInTheDocument();
+    await expect(document.activeElement).toBe(document.body);
   },
 };
 
@@ -179,7 +188,38 @@ export const AllColumnControls: Story = {
     enableColumnReordering: true,
     enableColumnResizing: true,
     enableColumnVisibility: true,
+    preferenceStorage: null,
     tableId: "storybook-all-column-controls",
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const label of ["Name", "Email", "Department", "Status", "Joined", "Balance"]) {
+      const header = canvas.getByRole("columnheader", { name: new RegExp(label) });
+      const sortButton = within(header).getByRole("button", { name: label });
+      const title = defined(sortButton.querySelector("span"));
+      const controls = defined(header.querySelector<HTMLElement>(".jt-grid__header-controls"));
+      const headerBounds = header.getBoundingClientRect();
+
+      await expect(title.getBoundingClientRect().left).toBeCloseTo(headerBounds.left + 12, 0);
+      await expect(controls.getBoundingClientRect().right).toBeCloseTo(headerBounds.right - 12, 0);
+    }
+
+    const trigger = canvas.getByLabelText("Column filters");
+    await userEvent.click(trigger);
+
+    const menu = defined(trigger.closest("details"));
+    const getPopover = () => defined(menu.querySelector<HTMLElement>(".jt-filters-menu__popover"));
+    const rootWidth = getPopover().getBoundingClientRect().width;
+    await expect(rootWidth).toBeGreaterThan(0);
+
+    for (const column of ["Name", "Email", "Department", "Status", "Balance"]) {
+      await userEvent.click(within(getPopover()).getByRole("button", { name: column }));
+      await expect(getPopover().getBoundingClientRect().width).toBeCloseTo(rootWidth, 0);
+      await userEvent.click(within(getPopover()).getByRole("button", { name: column }));
+      await expect(getPopover().getBoundingClientRect().width).toBeCloseTo(rootWidth, 0);
+    }
+
+    await userEvent.click(trigger);
   },
 };
 

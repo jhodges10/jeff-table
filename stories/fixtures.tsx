@@ -138,7 +138,6 @@ export const personColumns: DataGridColumnDef<Person>[] = [
     meta: {
       cellAlign: "right",
       filter: { format: "currency", min: 0, max: 100_000, step: 500, type: "number-range" },
-      headerAlign: "right",
       numericSort: true,
       prefix: "$",
       width: "130px",

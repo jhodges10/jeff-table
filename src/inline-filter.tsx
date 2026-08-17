@@ -133,6 +133,7 @@ function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEdi
       ? selected.filter((item) => item !== optionValue)
       : [...selected, optionValue];
     onChange(next.length > 0 ? next : undefined);
+    onDone?.();
   };
 
   return (
