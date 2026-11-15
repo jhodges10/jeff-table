@@ -1,4 +1,5 @@
 import {
+  type CellSelectionState,
   type ColumnFiltersState,
   type ColumnOrderState,
   type ColumnSizingState,
@@ -13,15 +14,23 @@ import { defaultPreferenceStorage } from "./preferences";
 import type { DataGridPreferenceStorage, DataGridPreferences } from "./types";
 import { reconcileColumnOrder } from "./utils";
 
+// A shared, frozen empty slice. A fresh `[]` per render would change the
+// external state identity every commit, and TanStack re-publishes external
+// state in a layout effect — which is a render pass the benchmarks count.
+const EMPTY_CELL_SELECTION: CellSelectionState = [];
+
 interface DataGridStateOptions {
+  cellSelection: CellSelectionState | undefined;
   columnIds: readonly string[];
   columnFilters: ColumnFiltersState | undefined;
+  defaultCellSelection: CellSelectionState | undefined;
   defaultColumnFilters: ColumnFiltersState | undefined;
   defaultColumnVisibility: ColumnVisibilityState | undefined;
   defaultGlobalFilter: string | undefined;
   defaultSorting: SortingState | undefined;
   globalFilter: string | undefined;
   initialPreferences: Partial<DataGridPreferences> | undefined;
+  onCellSelectionChange: ((selection: CellSelectionState) => void) | undefined;
   onColumnFiltersChange: ((filters: ColumnFiltersState) => void) | undefined;
   onGlobalFilterChange: ((value: string) => void) | undefined;
   onPreferencesChange: ((preferences: DataGridPreferences) => void) | undefined;
@@ -67,11 +76,15 @@ export function useDataGridState(options: DataGridStateOptions) {
     () => options.defaultGlobalFilter ?? "",
   );
   const [internalRowSelection, setInternalRowSelection] = React.useState<RowSelectionState>({});
+  const [internalCellSelection, setInternalCellSelection] = React.useState<CellSelectionState>(
+    () => options.defaultCellSelection ?? EMPTY_CELL_SELECTION,
+  );
 
   const sorting = options.sorting ?? internalSorting;
   const columnFilters = options.columnFilters ?? internalColumnFilters;
   const globalFilter = options.globalFilter ?? internalGlobalFilter;
   const rowSelection = options.rowSelection ?? internalRowSelection;
+  const cellSelection = options.cellSelection ?? internalCellSelection;
 
   React.useEffect(() => {
     setColumnOrder((current) => reconcileColumnOrder(options.columnIds, current));
@@ -125,6 +138,14 @@ export function useDataGridState(options: DataGridStateOptions) {
     },
     [globalFilter, options.globalFilter, options.onGlobalFilterChange],
   );
+  const onCellSelectionChange = React.useCallback<OnChangeFn<CellSelectionState>>(
+    (updater) => {
+      const next = functionalUpdate(updater, cellSelection);
+      if (options.cellSelection === undefined) setInternalCellSelection(next);
+      options.onCellSelectionChange?.(next);
+    },
+    [cellSelection, options.cellSelection, options.onCellSelectionChange],
+  );
   const onRowSelectionChange = React.useCallback<OnChangeFn<RowSelectionState>>(
     (updater) => {
       const next = functionalUpdate(updater, rowSelection);
@@ -142,11 +163,13 @@ export function useDataGridState(options: DataGridStateOptions) {
   }, [options.columnIds, options.defaultColumnVisibility, options.tableId, storage]);
 
   return {
+    cellSelection,
     columnFilters,
     columnOrder,
     columnSizing,
     columnVisibility,
     globalFilter,
+    onCellSelectionChange,
     onColumnFiltersChange,
     onColumnOrderChange: setColumnOrder as OnChangeFn<ColumnOrderState>,
     onColumnSizingChange: setColumnSizing as OnChangeFn<ColumnSizingState>,

@@ -1,6 +1,8 @@
 import {
+  type Cell,
   type Column,
   type ColumnDef,
+  cellSelectionFeature,
   columnFilteringFeature,
   columnOrderingFeature,
   columnResizingFeature,
@@ -23,6 +25,7 @@ import {
 import type { DataGridColumnMeta } from "./types";
 
 export const dataGridFeatures = tableFeatures({
+  cellSelectionFeature,
   columnFilteringFeature,
   globalFilteringFeature,
   columnOrderingFeature,
@@ -39,6 +42,11 @@ export const dataGridFeatures = tableFeatures({
 
 export type DataGridFeatures = typeof dataGridFeatures;
 export type DataGridColumnDef<TData extends RowData, TValue = unknown> = ColumnDef<
+  DataGridFeatures,
+  TData,
+  TValue
+>;
+export type DataGridCell<TData extends RowData, TValue = unknown> = Cell<
   DataGridFeatures,
   TData,
   TValue

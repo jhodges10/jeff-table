@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
 import { parseDataGridPreferences } from "./preferences";
+import type { DataGridNumberFormat } from "./types";
 import {
   calculateViewportHeight,
   deterministicSkeletonWidth,
+  formatNumberValue,
+  maskNumberText,
   moveColumn,
+  parseNumberText,
   reconcileColumnOrder,
   resolveColumnDropTarget,
 } from "./utils";
@@ -99,5 +103,47 @@ describe("filter matching", () => {
     expect(matchesColumnFilter("not-a-date", ["2026-01-01", ""], { type: "date-range" })).toBe(
       false,
     );
+  });
+});
+
+describe("number formatting", () => {
+  const usd: DataGridNumberFormat = { currency: "USD", locale: "en-US" };
+  const plain: DataGridNumberFormat = { locale: "en-US", maximumFractionDigits: 2 };
+
+  it("writes a value the way the column writes it", () => {
+    expect(formatNumberValue(usd, 40_845)).toBe("$40,845.00");
+    expect(formatNumberValue(plain, 1234.5)).toBe("1,234.5");
+    expect(formatNumberValue(usd, undefined)).toBe("");
+    expect(formatNumberValue(usd, "not a number")).toBe("");
+  });
+
+  it("keeps a partly typed number in the column's own shape", () => {
+    expect(maskNumberText(usd, "49000")).toBe("$49,000");
+    expect(maskNumberText(usd, "49000.5")).toBe("$49,000.5");
+    // The fraction is left as typed: reformatting to the minimum digits on
+    // every keystroke would make the field impossible to type into.
+    expect(maskNumberText(usd, "$40,845.00")).toBe("$40,845.00");
+    expect(maskNumberText(usd, "-1234")).toBe("-$1,234");
+    expect(maskNumberText(usd, "")).toBe("");
+    expect(maskNumberText(usd, "abc")).toBe("");
+  });
+
+  it("caps the fraction at what the format will show", () => {
+    expect(maskNumberText(usd, "1.239")).toBe("$1.23");
+  });
+
+  it("reads back what it wrote", () => {
+    expect(parseNumberText(usd, "$40,845.00")).toBe(40_845);
+    expect(parseNumberText(usd, "$49,000")).toBe(49_000);
+    expect(parseNumberText(usd, "-$1,234.50")).toBe(-1234.5);
+    expect(parseNumberText(usd, "")).toBeUndefined();
+    expect(parseNumberText(usd, "$")).toBeUndefined();
+  });
+
+  it("round-trips a locale that groups and decimalises differently", () => {
+    const euro: DataGridNumberFormat = { currency: "EUR", locale: "de-DE" };
+    const written = formatNumberValue(euro, 1234.5);
+    expect(parseNumberText(euro, written)).toBe(1234.5);
+    expect(maskNumberText(euro, written)).toBe(written);
   });
 });

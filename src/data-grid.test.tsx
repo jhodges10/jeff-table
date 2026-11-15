@@ -450,7 +450,7 @@ describe("DataGrid", () => {
     await user.click(redFilter);
     expect(tagsDetails).not.toHaveAttribute("open");
     expect(screen.queryByRole("checkbox", { name: "Red" })).not.toBeInTheDocument();
-    expect(document.activeElement).toBe(document.body);
+    expect(tagsSummary).toHaveFocus();
     expect(screen.getByText("75")).toBeVisible();
 
     const amountSummary = screen.getByLabelText("Filter amount");

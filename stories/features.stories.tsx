@@ -112,7 +112,7 @@ export const InlineFilters: Story = {
     await userEvent.click(engineering);
     await expect(departmentMenu).not.toHaveAttribute("open");
     await expect(canvas.queryByRole("checkbox", { name: "Engineering" })).not.toBeInTheDocument();
-    await expect(document.activeElement).toBe(document.body);
+    await expect(departmentFilter).toHaveFocus();
   },
 };
 
@@ -201,7 +201,12 @@ export const AllColumnControls: Story = {
       const headerBounds = header.getBoundingClientRect();
 
       await expect(title.getBoundingClientRect().left).toBeCloseTo(headerBounds.left + 12, 0);
-      await expect(controls.getBoundingClientRect().right).toBeCloseTo(headerBounds.right - 12, 0);
+      // The bounding box includes the grid line; padding starts inside it.
+      const border = Number.parseFloat(getComputedStyle(header).borderRightWidth);
+      await expect(controls.getBoundingClientRect().right).toBeCloseTo(
+        headerBounds.right - border - 12,
+        0,
+      );
     }
 
     const trigger = canvas.getByLabelText("Column filters");

@@ -33,6 +33,14 @@ export interface DateRangePickerProps extends DateRangePickerPanelProps {
   placeholder?: string;
 }
 
+export interface DatePickerPanelProps {
+  onChange: (next: string | undefined) => void;
+  onCommit?: () => void;
+  testId?: string;
+  /** ISO `yyyy-MM-dd`. */
+  value?: string;
+}
+
 interface DateRangePreset {
   key: string;
   label: string;
@@ -67,8 +75,13 @@ function CheckIcon() {
   );
 }
 
-function ChevronIcon({ orientation }: { orientation: "left" | "right" }) {
-  const path = orientation === "left" ? "m14 18-6-6 6-6" : "m10 6 6 6-6 6";
+function ChevronIcon({ orientation }: { orientation: "left" | "right" | "up" | "down" }) {
+  const path = {
+    left: "m14 18-6-6 6-6",
+    right: "m10 6 6 6-6 6",
+    down: "m6 9 6 6 6-6",
+    up: "m6 15 6-6 6 6",
+  }[orientation];
   return (
     <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
       <path
@@ -269,9 +282,7 @@ export function DateRangePickerPanel({
           selected={draft}
           showOutsideDays
           components={{
-            Chevron: ({ orientation }) => (
-              <ChevronIcon orientation={orientation === "left" ? "left" : "right"} />
-            ),
+            Chevron: ({ orientation }) => <ChevronIcon orientation={orientation ?? "right"} />,
           }}
         />
         <div className="jt-date-range-panel__footer">
@@ -307,6 +318,69 @@ export function DateRangePickerPanel({
         </div>
       </div>
     </fieldset>
+  );
+}
+
+/**
+ * A single-date calendar, for inline cell editing.
+ *
+ * It lives beside the range panel rather than in its own module so it reuses
+ * the same `isoDate`/`parseDate` helpers, the same chevron, and the whole
+ * `.jt-date-range-calendar` stylesheet block. Selecting a day commits: there is
+ * nothing to draft when only one date is being chosen.
+ */
+export function DatePickerPanel({
+  onChange,
+  onCommit,
+  testId = "date-picker",
+  value,
+}: DatePickerPanelProps) {
+  const selected = React.useMemo(() => parseDate(value), [value]);
+  const [visibleMonth, setVisibleMonth] = React.useState(() =>
+    startOfMonth(selected ?? new Date()),
+  );
+
+  React.useEffect(() => {
+    if (selected) setVisibleMonth(startOfMonth(selected));
+  }, [selected]);
+  const year = new Date().getFullYear();
+
+  return (
+    <div className="jt-date-panel" data-testid={`${testId}-content`}>
+      <DayPicker
+        aria-label="Choose a date"
+        className="jt-date-range-calendar"
+        captionLayout="dropdown"
+        navLayout="after"
+        startMonth={new Date(Math.min(year - 100, selected?.getFullYear() ?? year), 0)}
+        endMonth={new Date(Math.max(year + 20, selected?.getFullYear() ?? year), 11)}
+        components={{
+          Chevron: ({ orientation }) => <ChevronIcon orientation={orientation ?? "right"} />,
+        }}
+        fixedWeeks
+        mode="single"
+        month={visibleMonth}
+        onMonthChange={setVisibleMonth}
+        onSelect={(next) => {
+          onChange(next ? isoDate(next) : undefined);
+          onCommit?.();
+        }}
+        selected={selected}
+        showOutsideDays
+      />
+      <div className="jt-editor-actions">
+        <button
+          className="jt-editor-button"
+          type="button"
+          onClick={() => {
+            onChange(isoDate(new Date()));
+            onCommit?.();
+          }}
+        >
+          Today
+        </button>
+      </div>
+    </div>
   );
 }
 

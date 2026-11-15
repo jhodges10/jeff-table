@@ -38,10 +38,19 @@ body {
   min-width: 0;
   padding: 0.5rem;
 }
+.story-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.75rem;
+}
 .story-note {
   margin: 0 0 0.75rem;
   color: var(--story-ink-muted);
   font-size: 0.8125rem;
+}
+.story-stack .story-note {
+  margin: 0;
 }
 .story-toolbar-button {
   border: 1px solid var(--story-line);
@@ -196,4 +205,13 @@ body {
 }
 .story-tailwind-row:hover {
   background: light-dark(#faf5ff, #3b0764);
+}
+
+.story-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentcolor 10%, transparent);
+  font-size: 0.7rem;
 }
