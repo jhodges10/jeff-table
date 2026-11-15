@@ -2,14 +2,17 @@ import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
 import { DateRangePickerPanel } from "./date-range-picker";
 import type { DataGridColumn, DataGridInstance } from "./features";
+import { CheckIcon, ChevronIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
-import type { DataGridColumnFilterConfig, DataGridFilterOption } from "./types";
-import { closeDetailsOnEscape } from "./utils";
+import type { DataGridColumnFilterConfig, DataGridColumnMeta } from "./types";
+import { closeDetailsOnEscape, getColumnLabel, renderColumnOption } from "./utils";
 
 type FilterValue = string | string[] | undefined;
 
 interface ColumnFilterEditorProps {
   config: DataGridColumnFilterConfig;
+  /** The whole column meta, so options can be drawn the way the column draws values. */
+  meta: DataGridColumnMeta | undefined;
   onChange: (value: FilterValue) => void;
   onDone?: () => void;
   value: FilterValue;
@@ -45,34 +48,6 @@ function SearchIcon() {
   );
 }
 
-function CheckIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15">
-      <path
-        d="m5 12 4 4L19 6"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-function ChevronIcon({ direction = "right" }: { direction?: "left" | "right" }) {
-  return (
-    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
-      <path
-        d={direction === "left" ? "m15 18-6-6 6-6" : "m9 18 6-6-6-6"}
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
 function normalizeFilterValue(value: unknown): FilterValue {
   if (Array.isArray(value)) return value.map(String);
   if (value === undefined || value === null || value === "") return undefined;
@@ -101,17 +76,7 @@ function FilterClearButton({ label, onClick }: { label: string; onClick: () => v
   );
 }
 
-function OptionContent({
-  config,
-  option,
-}: {
-  config: DataGridColumnFilterConfig;
-  option: DataGridFilterOption;
-}) {
-  return config.renderOption?.(option) ?? option.label;
-}
-
-function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEditorProps) {
+function SelectFilterEditor({ config, meta, onChange, onDone, value }: ColumnFilterEditorProps) {
   const [search, setSearch] = React.useState("");
   const options = config.options ?? [];
   const selected = Array.isArray(value) ? value : value ? [value] : [];
@@ -163,9 +128,7 @@ function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEdi
                 data-selected={checked || undefined}
                 key={option.value}
               >
-                <span>
-                  <OptionContent config={config} option={option} />
-                </span>
+                <span>{renderColumnOption(meta, option, config.renderOption)}</span>
                 <IndeterminateCheckbox checked={checked} onChange={() => select(option.value)} />
               </label>
             ) : (
@@ -176,9 +139,7 @@ function SelectFilterEditor({ config, onChange, onDone, value }: ColumnFilterEdi
                 onClick={() => select(option.value)}
                 type="button"
               >
-                <span>
-                  <OptionContent config={config} option={option} />
-                </span>
+                <span>{renderColumnOption(meta, option, config.renderOption)}</span>
                 <span className="jt-filter-editor__check" data-visible={checked || undefined}>
                   <CheckIcon />
                 </span>
@@ -368,7 +329,11 @@ export function InlineFilter<TData extends RowData>({
 }: InlineFilterProps<TData>) {
   const value = normalizeFilterValue(column.getFilterValue());
   const activeCount = getActiveCount(value, config);
-  const close = () => onOpenChange(false);
+  const triggerReference = React.useRef<HTMLElement>(null);
+  const close = () => {
+    onOpenChange(false);
+    triggerReference.current?.focus();
+  };
 
   return (
     <details
@@ -385,6 +350,7 @@ export function InlineFilter<TData extends RowData>({
       <summary
         aria-label={`Filter ${column.id}`}
         className="jt-column-filter__trigger"
+        ref={triggerReference}
         data-active={activeCount > 0 || undefined}
       >
         <FilterIcon />
@@ -396,6 +362,7 @@ export function InlineFilter<TData extends RowData>({
         >
           <ColumnFilterEditor
             config={config}
+            meta={column.columnDef.meta}
             onChange={(nextValue) => column.setFilterValue(nextValue)}
             onDone={close}
             value={value}
@@ -404,10 +371,6 @@ export function InlineFilter<TData extends RowData>({
       ) : null}
     </details>
   );
-}
-
-function getColumnLabel<TData extends RowData>(column: DataGridColumn<TData>): string {
-  return typeof column.columnDef.header === "string" ? column.columnDef.header : column.id;
 }
 
 export function DataGridFiltersMenu<TData extends RowData>({
@@ -470,6 +433,7 @@ export function DataGridFiltersMenu<TData extends RowData>({
               <div className="jt-filters-menu__separator" />
               <ColumnFilterEditor
                 config={activeConfig}
+                meta={activeColumn.columnDef.meta}
                 onChange={(nextValue) => activeColumn.setFilterValue(nextValue)}
                 onDone={() => setActiveColumnId(undefined)}
                 value={filters.get(activeColumn.id)}

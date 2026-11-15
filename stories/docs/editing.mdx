@@ -1,0 +1,242 @@
+import { Canvas, Meta } from "@storybook/addon-docs/blocks";
+import * as EditingStories from "../editing.stories";
+
+<Meta of={EditingStories} />
+
+# Editing
+
+`enableInlineEditing` turns the grid from a view into a surface. The control a
+cell gets is decided by its column, the same way `meta.filter` decides its
+filter UI:
+
+```tsx
+<DataGrid
+  enableInlineEditing
+  getRowId={(person) => person.id}
+  onCellEdit={async ({ rowId, columnId, value }) => {
+    await api.patch(rowId, { [columnId]: value });
+  }}
+  columns={[
+    { accessorKey: "name", meta: { editor: { type: "text" } } },
+    { accessorKey: "balance", meta: { editor: { type: "number", min: 0, step: 250 } } },
+    { accessorKey: "status", meta: { editor: { type: "single-select" } } },
+    { accessorKey: "skills", meta: { editor: { type: "multi-select", options: skills } } },
+    { accessorKey: "onCall", meta: { editor: { type: "boolean" } } },
+    { accessorKey: "joined", meta: { editor: { type: "date" } } },
+  ]}
+/>
+```
+
+Turning editing on makes `getRowId` and `onCellEdit` mandatory in the type. The
+optimistic overlay and the focused-cell coordinate are both addressed by row ID,
+so an index-based identity would drift the moment a server sort or an appended
+page rearranged the rows.
+
+<Canvas of={EditingStories.EveryEditorType} />
+
+## Editor types
+
+| `type` | Control |
+| --- | --- |
+| `text` | An inline input. Enter or F2 offers the whole value for replacement; typing replaces it outright. |
+| `number` | A masked field that keeps the column's `meta.numberFormat` — symbol, grouping, decimals, alignment — with the caret at the far right. `min` and `max` are enforced on commit, and an unparseable value is refused. |
+| `single-select` | A typeahead combobox, opened at the value the cell holds. Enter takes the highlighted option and steps down. |
+| `multi-select` | A searchable option panel with a compact selected-value summary. Enter toggles; Done, Tab, or Ctrl/Cmd+Enter saves the selection. |
+| `boolean` | A switch, live in the cell — or a checkbox, with `control: "checkbox"`. There is no edit mode to enter: activating it *is* the commit. |
+| `date` | A text field holding the same string the cell showed, plus one calendar. The field drafts while it is typed; the calendar commits on click. |
+
+Single- and multi-select cells show a chevron before they are touched. Enter expands a single-select list *at* the value
+the cell already holds — pressing Enter twice is a no-op, not a silent jump to
+the first option — and the value stays visible until something is typed over it.
+
+Inside an open select the caret sits after the value the cell already holds, so
+the keys mean what they mean in any other field:
+
+| Key | Effect |
+| --- | --- |
+| `↓` / `↑` | Walk the list, starting from the value the cell holds |
+| `Enter` | Take the highlighted option — for a multi-select, toggle it and stay open |
+| `Backspace` / `Delete` | With nothing typed, delete what is behind the caret: the whole value, or the last chip. The list stays open for a replacement |
+| Typing | Filter the list; the held value gives way to what is typed |
+| `Tab` | Commit and step right |
+| `Ctrl/Cmd+Enter` | Save a multi-select and step down |
+| `Escape` | Cancel |
+
+A select editor with no `options` of its own falls back to the column's
+`filter.options`, so a column that already declares what it can be filtered by
+does not repeat the list to declare what it can be edited to.
+
+Options are drawn the way the column draws values. A status badge belongs to the
+value, not to the body cell, so `meta.renderValue` declares it once and it
+appears in the cell, in the filter's option list, in the editor's option list,
+and on a multi-select chip:
+
+```tsx
+{
+  accessorKey: "status",
+  meta: {
+    editor: { type: "single-select" },
+    filter: { options: statuses, type: "single-select" },
+    renderValue: (status) => <StatusBadge status={status} />,
+  },
+}
+```
+
+It receives the underlying value and falls back to the option label when unset.
+A `cell` renderer still wins in the body, where it has the whole row; either
+config's `renderOption` overrides `renderValue` for that one list.
+
+<Canvas of={EditingStories.TypeaheadSelect} />
+
+Matching stays fuzzy and accent-insensitive — the same matcher the grid's global
+search uses — but the results are ranked, so a prefix match beats a substring
+match beats a scattered one and the obvious answer is under the Enter key.
+
+<Canvas of={EditingStories.BooleanSwitch} />
+
+### Numbers and currency
+
+`meta.numberFormat` is `Intl.NumberFormat` options the grid owns both ends of:
+it writes the cell and the editor reads it back, so the two cannot drift.
+
+```tsx
+{
+  accessorKey: "balance",
+  meta: {
+    cellAlign: "right",
+    editor: { type: "number", min: 0 },
+    numberFormat: { currency: "USD", locale: "en-US" },
+  },
+}
+```
+
+`<input type="number">` is deliberately not used — it drops the symbol and the
+grouping, adds a spinner, and left-aligns, so a cell changes shape just for
+being opened. The masked field groups the integer side as it is typed and leaves
+the fraction exactly as typed; reformatting on every keystroke would append the
+minimum decimals and make the field impossible to type into.
+
+<Canvas of={EditingStories.CurrencyEditor} />
+
+### Dates
+
+The date editor is a plain text field, not `<input type="date">`. The native
+control opens the platform's calendar beside the grid's — two pickers answering
+one click — and renders in the browser's locale, so the text changes format the
+moment a cell goes from reading to editing. A text field holding exactly the
+string the cell was showing keeps one picker and one format. A half-typed date
+stays in the editor with a visible validation message. Month/year selectors let users jump across years, Today selects the current date, and Alt+Down moves focus into the calendar.
+
+<Canvas of={EditingStories.DateEditor} />
+
+## Keyboard
+
+A single click opens a cell's editor, and the whole cell is the target — a click
+on the padding beside a value opens it too. Content that handles its own clicks
+is exempt, so a boolean's switch toggles once rather than toggling and toggling
+back.
+
+The grid body is one tab stop; editing status and recovery actions follow it. The viewport is the way in until a cell is focused;
+from then on the focused cell carries the stop and arrow keys move it.
+
+| Key | Not editing | Editing |
+| --- | --- | --- |
+| `↑ ↓ ← →` | Move the focused cell | Move the caret |
+| `Enter` | Open the editor | Commit and step down |
+| `Tab` / `Shift+Tab` | Leave the grid | Commit and step right / left |
+| `F2` | Open the editor | Commit and stay |
+| `Escape` | Release the cell | Cancel, restoring the previous value |
+| Any character | Open the editor seeded with it | — |
+| `Space` | Toggle a boolean, or open the editor | — |
+| `Home` / `End` | First / last cell in the row | — |
+| `Ctrl/Cmd + Home` / `End` | First / last cell in the grid | — |
+| `Delete` / `Backspace` | Clear the cell (required/validated fields open an editor) | — |
+| `Ctrl/Cmd+Z` | Undo the last saved edit | Native text undo |
+
+Arrow keys walk the grid's own display order, not the row model's, so they still
+match what the reader sees when `sections` has regrouped the rows. Moving to a
+row outside the rendered window scrolls it in and follows it. Moving past the
+last loaded row asks for the next page instead of doing nothing.
+
+<Canvas of={EditingStories.KeyboardNavigation} />
+
+## Cell saving status
+
+Each cell exposes `data-status="idle"`, `"saving"`, or `"error"`. Returning a promise
+from `onCellEdit` automatically marks that cell as saving until the promise settles.
+The entire record dims and gently pulses while any of its cells are saving, including
+hidden columns. Successful saves restore full opacity; failures stop the pulse and
+show the existing error state. Reduced-motion preferences use steady dimming.
+
+Use `getCellStatus` to supply status for saves managed outside inline editing:
+
+```tsx
+<DataGrid
+  {...props}
+  getCellStatus={({ rowId, columnId }) =>
+    pendingCells.has(`${rowId}:${columnId}`) ? "saving" : "idle"
+  }
+/>
+```
+
+The callback returns `DataGridCellStatus` or `undefined` (idle). Active inline saves
+and errors take precedence over this callback. Saving rows and cells also expose
+`aria-busy="true"`.
+
+<Canvas of={EditingStories.SavingStatus} />
+
+## Validation and recovery
+
+Invalid input remains in its editor with an explanation linked to the input for
+screen readers. Correct it and save, or press Escape to discard the
+draft. Clicking another cell cannot discard invalid work.
+
+Use `required` for nonempty values, `min` / `max` for number bounds, or
+`validate(value)` to return a domain-specific error message. Date inputs accept
+real calendar dates in YYYY-MM-DD format, including leap-year validation.
+
+Multi-select search has its own row in the popover. The cell summarizes larger
+selections with a count; the option list shows every selected item. Done saves,
+and Escape restores the previous selection from the panel.
+
+**Undo last edit** reverses the most recent saved edit through `onCellEdit`, so
+it uses the same persistence and failure handling as ordinary edits. This is a
+single-level undo, available when no save is pending and the cell still holds
+its saved value. It works for text, choices, dates, numbers, and booleans.
+
+## Committing
+
+`onCellEdit` may return nothing or a promise. Either way the grid shows the new
+value at once, by patching the row the table is built from — so a custom `cell`
+renderer, a sort comparator, and a filter all agree with what the cell shows.
+
+- A **synchronous** handler has already applied its own state update in the same
+  batch, so the overlay has nothing left to cover and clears immediately.
+- A **resolved** promise keeps the value applied until new `data` arrives, so the
+  cell never flashes the old value for a frame in between.
+- A **rejected** promise reverts the row and marks the cell `data-edit-status="error"`,
+  with a visible error message and Retry / Discard actions below the grid. Reopening the cell restores the attempted value for correction.
+
+Committing a value that a live filter or sort depends on will move or remove the
+row — the same thing that would happen when the application's own `data` update
+landed. Focus follows the row by ID, and returns to the viewport if the row
+leaves the model entirely.
+
+<Canvas of={EditingStories.FailingSave} />
+
+Two escape hatches:
+
+- `isCellEditable({ columnId, row })` refuses individual cells while leaving them
+  focusable and readable, the way a spreadsheet treats a locked cell.
+- `applyCellEdit(row, columnId, value)` controls how the optimistic value is
+  written back. The default writes at the column ID, which is right for every
+  `accessorKey` column, dotted paths included; a column with a custom
+  `accessorFn` has no such property and needs this.
+
+## Cell selection
+
+Editing is built on TanStack v9's `cellSelectionFeature`, which the grid
+registers and leaves inert unless `enableInlineEditing` is set. `cellSelection`
+and `onCellSelectionChange` are controllable like every other state slice.
+Range selection, drag, and clipboard are deliberately off: they need a
+display-order model that `sections` does not currently supply.

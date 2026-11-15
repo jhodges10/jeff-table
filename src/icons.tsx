@@ -14,6 +14,40 @@ const baseProps = {
   width: 16,
 };
 
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props} aria-hidden="true">
+      <path d="m5 12 4 4L19 6" strokeWidth="2" />
+    </svg>
+  );
+}
+
+const CHEVRON_PATHS = {
+  down: "m6 9 6 6 6-6",
+  left: "m15 18-6-6 6-6",
+  right: "m9 18 6-6-6-6",
+  up: "m18 15-6-6-6 6",
+} as const;
+
+export function ChevronIcon({
+  direction = "right",
+  ...props
+}: IconProps & { direction?: keyof typeof CHEVRON_PATHS }) {
+  return (
+    <svg {...baseProps} {...props} aria-hidden="true">
+      <path d={CHEVRON_PATHS[direction]} />
+    </svg>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <svg {...baseProps} {...props} aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
 export function ColumnsIcon(props: IconProps) {
   return (
     <svg {...baseProps} {...props} aria-hidden="true">

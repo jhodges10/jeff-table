@@ -1,6 +1,6 @@
 import type { DataGridColumnFilterConfig } from "./types";
 
-function normalize(value: unknown): string {
+export function normalizeSearchText(value: unknown): string {
   return String(value ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -21,7 +21,7 @@ export function matchesColumnFilter(
 
   switch (config.type) {
     case "text":
-      return normalize(value).includes(normalize(filterValue));
+      return normalizeSearchText(value).includes(normalizeSearchText(filterValue));
     case "single-select":
     case "boolean":
       return String(value ?? "") === String(filterValue);
@@ -49,9 +49,9 @@ export function matchesColumnFilter(
 }
 
 export function matchesGlobalFilter(value: unknown, query: string): boolean {
-  const normalizedQuery = normalize(query).trim();
+  const normalizedQuery = normalizeSearchText(query).trim();
   if (!normalizedQuery) return true;
-  const candidate = normalize(value);
+  const candidate = normalizeSearchText(value);
   if (candidate.includes(normalizedQuery)) return true;
 
   let queryIndex = 0;
@@ -60,4 +60,22 @@ export function matchesGlobalFilter(value: unknown, query: string): boolean {
     if (queryIndex === normalizedQuery.length) return true;
   }
   return false;
+}
+
+/**
+ * Ranks one option against a typeahead query.
+ *
+ * `matchesGlobalFilter` falls back to a subsequence match, which is generous
+ * enough that a single letter matches nearly every option — fine for "is this
+ * a hit", useless for "which hit comes first". Scoring keeps the generosity and
+ * puts the obvious answer at the top: a prefix beats a substring beats a
+ * scattered subsequence. Returns `undefined` when the option does not match.
+ */
+export function scoreOptionMatch(label: string, query: string): number | undefined {
+  const normalizedQuery = normalizeSearchText(query).trim();
+  if (!normalizedQuery) return 0;
+  const index = normalizeSearchText(label).indexOf(normalizedQuery);
+  if (index === 0) return 3;
+  if (index > 0) return 2;
+  return matchesGlobalFilter(label, query) ? 1 : undefined;
 }

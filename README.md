@@ -273,6 +273,158 @@ Selection is a discriminated TypeScript contract. Turning it on makes `getRowId`
 
 TanStack v9 supplies contiguous Shift selection through the row checkbox handlers. Select-all only applies to currently loaded, selectable rows.
 
+## Inline editing
+
+`enableInlineEditing` turns the grid from a view into a surface. A column's
+`meta.editor` picks its control, the same way `meta.filter` picks its filter UI.
+
+```tsx
+<DataGrid
+  enableInlineEditing
+  getRowId={(person) => person.id}
+  onCellEdit={async ({ rowId, columnId, value }) => {
+    await api.patch(rowId, { [columnId]: value });
+  }}
+  columns={[
+    { accessorKey: "name", meta: { editor: { type: "text" } } },
+    { accessorKey: "balance", meta: { editor: { type: "number", min: 0, step: 250 } } },
+    { accessorKey: "status", meta: { editor: { type: "single-select" } } },
+    { accessorKey: "skills", meta: { editor: { type: "multi-select", options: skills } } },
+    { accessorKey: "onCall", meta: { editor: { type: "boolean" } } },
+    { accessorKey: "joined", meta: { editor: { type: "date" } } },
+  ]}
+  // ...
+/>
+```
+
+A `single-select` cell shows a chevron before it is touched, so a reader knows
+it opens a list without having to try it. Enter expands that list *at* the value
+the cell already holds, with the caret after that value — so arrow keys walk to
+a replacement, Backspace deletes what is behind the caret, and typing filters.
+The held value stays visible until something is typed over it.
+
+Editor types are `text`, `number`, `single-select`, `multi-select`, `boolean`,
+and `date`. The date editor is a text field holding the same string the cell
+showed, plus one calendar — `<input type="date">` would open the platform's own
+picker beside the grid's and re-render the value in the browser's locale. The two select editors are typeahead comboboxes; with no `options`
+of their own they fall back to the column's `filter.options`, so a column that
+already declares what it can be filtered by does not repeat the list to declare
+what it can be edited to. Matching is fuzzy and accent-insensitive — the same
+matcher the global search uses — but ranked, so a prefix match sits under the
+Enter key. A `boolean` column renders a live control: there is no edit mode to
+enter, and activating it is the commit. It draws a switch by default and a
+checkbox when the column asks for one with `editor.control: "checkbox"` — a
+switch reads as a setting that takes effect at once, a checkbox as a value in a
+record, and the commit path behind them is identical.
+
+Like selection, editing is a discriminated contract: turning it on makes
+`getRowId` and `onCellEdit` mandatory, because the optimistic overlay and the
+focused-cell coordinate are both addressed by row ID.
+
+### Pointer
+
+A single click opens a cell's editor, and the whole cell is the target — a
+click on the padding beside a value opens it too. Content that handles its own
+clicks is exempt: a boolean's switch commits on its own change event, and a
+link or button in a custom `cell` renderer keeps its job, so one click never
+runs two activations.
+
+### Keyboard
+
+The grid is one tab stop. The viewport is the way in until a cell is focused;
+from then on the focused cell carries the stop. Because a click edits, a cell
+that is focused but closed is reached by arrowing to it, or by pressing
+`Escape` to step back out of the editor a click opened.
+
+| Key | Not editing | Editing |
+| --- | --- | --- |
+| Arrow keys | Move the focused cell | Move the caret |
+| `Enter` | Open the editor | Commit and step down |
+| `Tab` / `Shift+Tab` | Leave the grid | Commit and step right / left |
+| `F2` | Open the editor | Commit and stay |
+| `Escape` | Release the cell | Cancel, restoring the previous value |
+| Any character | Open the editor seeded with it | — |
+| `Home` / `End`, with `Ctrl`/`Cmd` | Row edges, then grid edges | — |
+| `Delete` / `Backspace` | Clear the cell | — |
+
+Arrow keys walk the grid's display order rather than the row model's, so they
+keep matching what the reader sees when `sections` has regrouped the rows.
+Moving to a row outside the rendered window scrolls it in; moving past the last
+loaded row asks for the next page.
+
+### Committing
+
+`onCellEdit` may return nothing or a promise. Either way the grid shows the new
+value immediately, by patching the row the table is built from — so custom cell
+renderers, sort comparators, and filters all agree with what the cell shows.
+
+- A synchronous handler has already applied its own update in the same batch.
+- A resolved promise keeps the value applied until new `data` arrives, so the
+  cell never flashes the old value in between.
+- A rejected promise reverts the row and marks the cell
+  `data-edit-status="error"`, with the message as its `title`.
+
+`isCellEditable({ columnId, row })` refuses individual cells while leaving them
+focusable, the way a spreadsheet treats a locked one. `applyCellEdit(row,
+columnId, value)` controls how the optimistic value is written back; the default
+writes at the column ID, which is right for every `accessorKey` column, dotted
+paths included, but a column with a custom `accessorFn` has no such property and
+needs it.
+
+Editing is built on TanStack v9's `cellSelectionFeature`, which the grid
+registers and leaves inert unless `enableInlineEditing` is set. `cellSelection`
+and `onCellSelectionChange` are controllable like every other state slice. Range
+selection, drag, and clipboard are deliberately off for now.
+
+### Numbers and currency
+
+`meta.numberFormat` is `Intl.NumberFormat` options the grid owns both ends of.
+It writes the cell, and the number editor reads it back — so a cell showing
+`$40,845.00` opens an editor showing `$40,845.00`, right-aligned, with the caret
+at the far right, and nothing on the row moves.
+
+```tsx
+{
+  accessorKey: "balance",
+  meta: {
+    cellAlign: "right",
+    editor: { type: "number", min: 0 },
+    numberFormat: { currency: "USD", locale: "en-US" },
+    numericSort: true,
+  },
+}
+```
+
+The field is a masked text input, not `<input type="number">`: the native
+control drops the symbol and the grouping, adds a spinner, and left-aligns. As
+you type, the integer side keeps its grouping and the fraction is left exactly
+as typed — reformatting on every keystroke would append the minimum decimals and
+make the field impossible to type into. `min` and `max` are enforced on commit,
+and an unparseable value is refused rather than saved.
+
+### One value, one appearance
+
+A status badge is a property of the value, not of the body cell. Declare it once
+as `meta.renderValue` and it is drawn in the cell, in the filter's option list,
+in the editor's option list, and on a multi-select chip — so the same value
+never reads three different ways.
+
+```tsx
+{
+  accessorKey: "status",
+  meta: {
+    editor: { type: "single-select" },
+    filter: { options: statuses, type: "single-select" },
+    renderValue: (status) => <StatusBadge status={status} />,
+  },
+}
+```
+
+`renderValue` receives the underlying value and falls back to the option label
+when it is not set. A `cell` renderer still wins in the body, where it has the
+whole row to work with; `renderValue` covers every surface that only has the
+value. Either config's `renderOption` overrides it for that one list.
+
 ## Column metadata
 
 `DataGridColumnMeta` adds:
@@ -282,9 +434,12 @@ TanStack v9 supplies contiguous Shift selection through the row checkbox handler
 | `width`, `minWidth`, `maxWidth` | Default CSS grid track and resize bounds |
 | `headerAlign`, `cellAlign` | Independent header/body alignment |
 | `headerTooltip` | Accessible help content beside the label |
+| `editor` | Inline editor configuration |
 | `filter` | Inline filter configuration |
+| `numberFormat` | Currency/decimal formatting for the cell and its editor |
 | `numericSort` | Numeric sorting for formatted values |
 | `prefix`, `suffix` | Default-cell value decoration |
+| `renderValue` | How one value is drawn, in the cell and in every option list |
 | `reorderable`, `resizable` | Per-column interaction opt-outs |
 | `skeleton` | Placeholder shape and stable sizing |
 | `headerClassName`, `cellClassName` | Per-column style hooks |

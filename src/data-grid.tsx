@@ -3,20 +3,36 @@
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { defaultRangeExtractor, type Range, useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
+import { CellEditor, type CellEditorMove } from "./cell-editor";
 import { ColumnVisibilityMenu } from "./column-visibility-menu";
 import {
+  type DataGridCell,
   type DataGridColumn,
   type DataGridColumnDef,
   type DataGridRow,
   dataGridFeatures,
 } from "./features";
 import { matchesColumnFilter, matchesGlobalFilter } from "./filtering";
-import { DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
+import { ChevronIcon, DragIcon, SearchIcon, SortIcon, SpinnerIcon } from "./icons";
 import { IndeterminateCheckbox } from "./indeterminate-checkbox";
 import { DataGridFiltersMenu, InlineFilter } from "./inline-filter";
 import { OverlayScrollbars } from "./overlay-scrollbar";
+import { Switch } from "./switch";
 import { createThemeStyle } from "./theme";
-import type { DataGridProps, DataGridRenderContext, DataGridSlot } from "./types";
+import type {
+  DataGridColumnMeta,
+  DataGridOption,
+  DataGridProps,
+  DataGridRenderContext,
+  DataGridSlot,
+} from "./types";
+import {
+  applyPendingEdits,
+  defaultApplyCellEdit,
+  isSameValue,
+  useCellEditing,
+} from "./use-cell-editing";
+import { useCellNavigation } from "./use-cell-navigation";
 import { useColumnReordering } from "./use-column-reordering";
 import { useDataGridState } from "./use-data-grid-state";
 import {
@@ -24,7 +40,10 @@ import {
   calculateViewportHeight,
   cx,
   deterministicSkeletonWidth,
+  formatNumberValue,
   getColumnDefinitionId,
+  getColumnLabel,
+  renderColumnValue,
 } from "./utils";
 
 const DENSITY_ROW_HEIGHT = {
@@ -39,6 +58,42 @@ const LOADING_INDICATOR_FADE_MS = 200;
 const KEYBOARD_SCROLL_PROPS: React.HTMLAttributes<HTMLDivElement> = { tabIndex: 0 };
 
 const PIXEL_WIDTH_PATTERN = /^(\d+(?:\.\d+)?)px$/;
+const NO_EDITOR_OPTIONS: readonly DataGridOption[] = [];
+/** Content that handles its own clicks, so the cell must not handle them too. */
+const INTERACTIVE_CELL_CONTENT =
+  "a,button,input,select,textarea,[contenteditable='true'],[role='switch']";
+const ARROW_DIRECTIONS = {
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+} as const;
+
+/**
+ * A select editor falls back to the column's filter options, so a column that
+ * already declares what it can be filtered by does not repeat the list to
+ * declare what it can be edited to.
+ */
+function resolveEditorOptions(meta: DataGridColumnMeta | undefined): readonly DataGridOption[] {
+  return meta?.editor?.options ?? meta?.filter?.options ?? NO_EDITOR_OPTIONS;
+}
+
+/** A cell value through `meta.renderValue`, one node per entry for a list. */
+function renderColumnValues(meta: DataGridColumnMeta, value: unknown): React.ReactNode {
+  if (Array.isArray(value)) {
+    return (
+      <span className="jt-cell-values">
+        {value.map((item) => (
+          <React.Fragment key={String(item)}>
+            {renderColumnValue(meta, String(item))}
+          </React.Fragment>
+        ))}
+      </span>
+    );
+  }
+  return renderColumnValue(meta, value === null || value === undefined ? "" : String(value));
+}
+
 const INTERACTIVE_SELECTION_TARGET = "a, button, input, label, select, textarea";
 
 function handleSelectionCellClick(
@@ -196,6 +251,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     virtualize = true,
   } = props;
   const rowHeight = rowHeightProp ?? DENSITY_ROW_HEIGHT[density];
+  const editingEnabled = props.enableInlineEditing === true;
   const popoverGroup = React.useId();
   const [openPopover, setOpenPopover] = React.useState<string>();
   const scrollReference = React.useRef<HTMLDivElement>(null);
@@ -206,14 +262,17 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     [columns],
   );
   const gridState = useDataGridState({
+    cellSelection: props.cellSelection,
     columnIds,
     columnFilters: props.columnFilters,
+    defaultCellSelection: props.defaultCellSelection,
     defaultColumnFilters: props.defaultColumnFilters,
     defaultColumnVisibility: props.defaultColumnVisibility,
     defaultGlobalFilter: props.defaultGlobalFilter,
     defaultSorting: props.defaultSorting,
     globalFilter: props.globalFilter,
     initialPreferences: props.initialPreferences,
+    onCellSelectionChange: props.onCellSelectionChange,
     onColumnFiltersChange: props.onColumnFiltersChange,
     onGlobalFilterChange: props.onGlobalFilterChange,
     onPreferencesChange: props.onPreferencesChange,
@@ -224,7 +283,32 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     tableId: props.tableId,
   });
   const processedColumns = React.useMemo(() => prepareColumns(columns), [columns]);
-  const tableData = React.useMemo(() => [...data], [data]);
+  // TanStack fills in a default `cell` renderer, so `columnDef.cell` is always
+  // set by the time a cell renders and cannot answer "did the author write
+  // one?". The raw column defs can, and only they decide whether the grid is
+  // free to draw the value itself.
+  const authoredCellColumnIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const column of columns) {
+      const id = column.cell === undefined ? undefined : getColumnDefinitionId(column);
+      if (id !== undefined) ids.add(id);
+    }
+    return ids;
+  }, [columns]);
+  const editing = useCellEditing<TData>({ data, onCellEdit: props.onCellEdit });
+  const applyCellEdit = props.applyCellEdit ?? defaultApplyCellEdit;
+  const { editsByRow } = editing;
+  const getRowId = props.getRowId;
+  // The optimistic overlay is applied to the data the table is built from, not
+  // at render time: a custom `cell` renderer, a sort comparator, and a filter
+  // all read through `getValue`, and they have to agree with what the cell
+  // shows. The empty case keeps today's plain copy.
+  const tableData = React.useMemo(() => {
+    if (!editsByRow || !getRowId) return [...data];
+    return data.map((row, index) =>
+      applyPendingEdits(row, editsByRow.get(getRowId(row, index)), applyCellEdit),
+    );
+  }, [applyCellEdit, data, editsByRow, getRowId]);
 
   const table = useTable({
     features: dataGridFeatures,
@@ -232,6 +316,14 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     data: tableData,
     defaultColumn: { minSize: 72, maxSize: 1200, size: 160 },
     columnResizeMode: "onChange",
+    // Cell selection is the focus model behind inline editing, not a feature of
+    // its own yet: it stays off unless editing is on, and range selection,
+    // drag, and multi-range stay off entirely until there is a UI for them.
+    autoResetCellSelection: false,
+    enableCellRangeSelection: false,
+    enableCellSelection: editingEnabled,
+    enableCellSelectionDrag: false,
+    enableMultiCellRangeSelection: false,
     enableColumnResizing,
     enableRowSelection: props.enableRowSelection
       ? (row) => props.isRowSelectable?.(row.original) ?? true
@@ -241,6 +333,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
       matchesGlobalFilter(row.getValue(columnId), String(value ?? "")),
     manualFiltering,
     manualSorting,
+    onCellSelectionChange: gridState.onCellSelectionChange,
     onColumnFiltersChange: gridState.onColumnFiltersChange,
     onColumnOrderChange: gridState.onColumnOrderChange,
     onColumnSizingChange: gridState.onColumnSizingChange,
@@ -249,6 +342,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     onRowSelectionChange: gridState.onRowSelectionChange,
     onSortingChange: gridState.onSortingChange,
     state: {
+      cellSelection: gridState.cellSelection,
       columnFilters: gridState.columnFilters,
       columnOrder: gridState.columnOrder,
       columnSizing: gridState.columnSizing,
@@ -290,6 +384,10 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
   const sectionIndexesReference = React.useRef(sectionIndexes);
   sectionIndexesReference.current = sectionIndexes;
   const activeSectionIndexReference = React.useRef<number | undefined>(sectionIndexes[0]);
+  // An open editor anchors its popover to its cell, so that row has to stay
+  // mounted even if a scroll carries it out of the window. Same mechanism the
+  // sticky section header already uses.
+  const pinnedRowIndexReference = React.useRef<number | undefined>(undefined);
   const extractStickyRange = React.useCallback((range: Range) => {
     let activeSectionIndex: number | undefined;
     for (const sectionIndex of sectionIndexesReference.current) {
@@ -299,8 +397,11 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     activeSectionIndexReference.current = activeSectionIndex;
 
     const indexes = defaultRangeExtractor(range);
-    if (activeSectionIndex === undefined || indexes.includes(activeSectionIndex)) return indexes;
-    return [...indexes, activeSectionIndex].sort((left, right) => left - right);
+    const extra = [activeSectionIndex, pinnedRowIndexReference.current].filter(
+      (index): index is number => index !== undefined && !indexes.includes(index),
+    );
+    if (extra.length === 0) return indexes;
+    return [...indexes, ...extra].sort((left, right) => left - right);
   }, []);
 
   const rowVirtualizer = useVirtualizer({
@@ -330,6 +431,39 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
         size: rowHeight,
         start: index * rowHeight,
       }));
+
+  const [editorLayer, setEditorLayer] = React.useState<HTMLDivElement | null>(null);
+  const loadMore = props.onLoadMore;
+  const requestLoadMore = React.useCallback(() => {
+    void loadMore?.({ loadedCount: data.length, totalCount });
+  }, [data.length, loadMore, totalCount]);
+  const scrollToIndex = React.useCallback(
+    (index: number) => rowVirtualizer.scrollToIndex(index, { align: "auto" }),
+    [rowVirtualizer],
+  );
+  const navigation = useCellNavigation<TData>({
+    displayItems,
+    enabled: editingEnabled,
+    hasMore,
+    onLoadMore: loadMore ? requestLoadMore : undefined,
+    scrollToIndex: virtualize ? scrollToIndex : undefined,
+    table,
+    viewportReference: scrollReference,
+  });
+  const focusedCell = editingEnabled ? table.getFocusedCell() : undefined;
+  pinnedRowIndexReference.current =
+    editing.editor && focusedCell
+      ? navigation.displayIndexByRowId.get(focusedCell.row.id)
+      : undefined;
+
+  const canEditCell = React.useCallback(
+    (cell: DataGridCell<TData>) => {
+      const config = cell.column.columnDef.meta?.editor;
+      if (!config || config.editable === false) return false;
+      return props.isCellEditable?.({ columnId: cell.column.id, row: cell.row.original }) ?? true;
+    },
+    [props.isCellEditable],
+  );
 
   const requestedAtCount = React.useRef<number | null>(null);
   React.useEffect(() => {
@@ -452,6 +586,133 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
     setOpenPopover((current) => (open ? id : current === id ? undefined : current));
   }, []);
 
+  const openEditor = (cell: DataGridCell<TData>, seed?: string) => {
+    if (editing.invalid.current || !canEditCell(cell)) return;
+    const config = cell.column.columnDef.meta?.editor;
+    // A boolean has nothing to draft, so activating it is the commit.
+    if (config?.type === "boolean") {
+      editing.commit(cell, !cell.getValue());
+      navigation.focusCell(cell);
+      return;
+    }
+    // An editor is a popover too: it joins the one-at-a-time rule.
+    setOpenPopover(undefined);
+    editing.open(cell.id, seed);
+  };
+
+  /**
+   * A single click edits, and the whole cell is the target — clicking the
+   * padding beside a value opens it too.
+   *
+   * Anything interactive already inside the cell is exempt. A boolean's switch
+   * commits on its own change event, and a link or button in a custom `cell`
+   * renderer has its own job; letting the cell act on those clicks as well
+   * would run two activations for one click, which for a boolean means
+   * toggling it straight back.
+   */
+  const handleCellClick = (
+    cell: DataGridCell<TData>,
+    isEditing: boolean,
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (isEditing || editing.invalid.current) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const control = target?.closest(INTERACTIVE_CELL_CONTENT);
+    if (control && event.currentTarget.contains(control)) return;
+    openEditor(cell);
+  };
+
+  const handleCellCommit = (cell: DataGridCell<TData>, value: unknown, move: CellEditorMove) => {
+    editing.commit(cell, value);
+    if (move === "none") navigation.requestFocus();
+    else navigation.step(move);
+  };
+
+  const findEditableCell = (rowId: string, columnId: string) =>
+    table
+      .getCoreRowModel()
+      .rowsById[rowId]?.getAllCells()
+      .find((cell) => cell.column.id === columnId);
+  const undoCell = editing.undoEdit
+    ? findEditableCell(editing.undoEdit.rowId, editing.undoEdit.columnId)
+    : undefined;
+  const canUndo = Boolean(
+    undoCell &&
+      canEditCell(undoCell) &&
+      !editing.editor &&
+      ![...editing.pending.values()].some((edit) => edit.status === "saving") &&
+      isSameValue(undoCell.getValue(), editing.undoEdit?.value),
+  );
+  const undoLastEdit = () => {
+    if (canUndo && undoCell) editing.undo(undoCell);
+  };
+  const errors = [...editing.pending.entries()].filter(([, edit]) => edit.status === "error");
+  const savingCount = [...editing.pending.values()].filter(
+    (edit) => edit.status === "saving",
+  ).length;
+
+  const handleViewportKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // An open editor owns its own keys and reports back through `onCommit`.
+    if (!editingEnabled || editing.editor) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+      if (canUndo) {
+        event.preventDefault();
+        undoLastEdit();
+      }
+      return;
+    }
+    const cell = table.getFocusedCell();
+    if (!cell) return;
+
+    const direction = ARROW_DIRECTIONS[event.key as keyof typeof ARROW_DIRECTIONS];
+    if (direction) {
+      event.preventDefault();
+      navigation.step(direction);
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      navigation.stepToEdge(
+        event.key === "Home" ? "left" : "right",
+        event.ctrlKey || event.metaKey,
+      );
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      table.resetCellSelection(true);
+      scrollReference.current?.focus();
+      return;
+    }
+    if (event.key === "Enter" || event.key === "F2" || event.key === " ") {
+      event.preventDefault();
+      openEditor(cell);
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") {
+      if (!canEditCell(cell)) return;
+      event.preventDefault();
+      const config = cell.column.columnDef.meta?.editor;
+      if (config?.required || config?.validate) {
+        openEditor(cell, "");
+        return;
+      }
+      editing.commit(cell, config?.type === "multi-select" ? [] : undefined);
+      return;
+    }
+    // Type-to-edit: one printable character, no modifier claiming it.
+    if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      openEditor(cell, event.key);
+    }
+  };
+
+  const handleViewportFocus = (event: React.FocusEvent<HTMLDivElement>) => {
+    // The viewport is the way in only until a cell owns the tab stop.
+    if (!editingEnabled || event.target !== event.currentTarget) return;
+    if (gridState.cellSelection.length === 0) navigation.focusFirstCell();
+  };
+
   return (
     <div
       className={cx("jt-grid", classNames.root, className)}
@@ -460,6 +721,29 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
       data-loading={isLoading || isLoadingMore || undefined}
       data-scrollbar={scrollbar}
       data-testid={testId}
+      onClickCapture={(event) => {
+        if (
+          editing.invalid.current &&
+          event.target instanceof Element &&
+          !event.target.closest("[data-editing=true], [data-editor-owner]")
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+      onMouseDownCapture={(event) => {
+        if (!editing.editor || !(event.target instanceof Element)) return;
+        if (event.target.closest("[data-editing=true], [data-editor-owner]")) return;
+        const input = event.currentTarget.querySelector<HTMLInputElement>(
+          "[data-editing=true] input, .jt-editor-search input",
+        );
+        input?.blur();
+        if (editing.invalid.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          input?.focus();
+        }
+      }}
       style={themeStyle}
     >
       {showHeaderBand ? (
@@ -710,9 +994,15 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
             {...KEYBOARD_SCROLL_PROPS}
             className={cx("jt-grid__viewport", "jt-grid__rows-viewport", classNames.viewport)}
             data-slot="viewport"
+            onFocus={editingEnabled ? handleViewportFocus : undefined}
+            onKeyDown={editingEnabled ? handleViewportKeyDown : undefined}
             onScroll={handleRowsScroll}
             ref={scrollReference}
             role="rowgroup"
+            // Exactly one tab stop. The viewport is the way in until a cell is
+            // focused; from then on the focused cell carries it, so Tab does
+            // not land twice on the same grid.
+            tabIndex={editingEnabled && gridState.cellSelection.length > 0 ? -1 : 0}
           >
             <div className="jt-grid__canvas jt-grid__rows-canvas" ref={rowsCanvasReference}>
               <div
@@ -924,6 +1214,21 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                     }
 
                     const row = item.row;
+                    const cellStatuses = new Map(
+                      row.getAllCells().map((cell) => {
+                        const pending = editingEnabled ? editing.pending.get(cell.id) : undefined;
+                        const status =
+                          pending?.status === "saving" || pending?.status === "error"
+                            ? pending.status
+                            : (props.getCellStatus?.({
+                                columnId: cell.column.id,
+                                row: row.original,
+                                rowId: row.id,
+                              }) ?? "idle");
+                        return [cell.id, status] as const;
+                      }),
+                    );
+                    const rowSaving = [...cellStatuses.values()].includes("saving");
                     const canSelect = props.enableRowSelection ? row.getCanSelect() : true;
                     const rowClass =
                       typeof props.rowClassName === "function"
@@ -933,6 +1238,8 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                       <div
                         className={cx("jt-grid__row", classNames.row, rowClass)}
                         aria-rowindex={virtualItem.index + 1}
+                        aria-busy={rowSaving || undefined}
+                        data-status={rowSaving ? "saving" : undefined}
                         data-disabled={!canSelect || undefined}
                         data-index={virtualItem.index}
                         data-row-id={row.id}
@@ -944,7 +1251,7 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                         }}
                         role="row"
                         style={{ ...virtualStyle, gridTemplateColumns: gridTemplate }}
-                        tabIndex={props.onRowClick ? 0 : undefined}
+                        tabIndex={props.onRowClick && !editingEnabled ? 0 : undefined}
                       >
                         {props.enableRowSelection ? (
                           // biome-ignore lint/a11y/useKeyWithClickEvents: the nested checkbox remains the keyboard target; this expands only its pointer target
@@ -971,18 +1278,128 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
                         {row.getVisibleCells().map((cell) => {
                           const meta = cell.column.columnDef.meta;
                           const value = cell.getValue();
-                          const content = cell.column.columnDef.cell
+                          const editorConfig = editingEnabled ? meta?.editor : undefined;
+                          const pending = editingEnabled ? editing.pending.get(cell.id) : undefined;
+                          const status = cellStatuses.get(cell.id) ?? "idle";
+                          const isEditing = editing.editor?.cellId === cell.id;
+                          const display = authoredCellColumnIds.has(cell.column.id)
                             ? flexRender(cell.column.columnDef.cell, cell.getContext())
-                            : `${meta?.prefix ?? ""}${value === null || value === undefined ? "" : String(value)}${
-                                meta?.suffix ?? ""
-                              }`;
+                            : meta?.renderValue
+                              ? renderColumnValues(meta, value)
+                              : meta?.numberFormat
+                                ? formatNumberValue(meta.numberFormat, value)
+                                : `${meta?.prefix ?? ""}${value === null || value === undefined ? "" : String(value)}${
+                                    meta?.suffix ?? ""
+                                  }`;
+                          const summary =
+                            editorConfig?.type === "multi-select" &&
+                            Array.isArray(value) &&
+                            value.length > 1 &&
+                            !authoredCellColumnIds.has(cell.column.id) ? (
+                              <span className="jt-cell-values">
+                                <span className="jt-cell-summary">
+                                  {meta?.renderValue
+                                    ? renderColumnValue(meta, String(value[0]))
+                                    : String(value[0])}
+                                </span>
+                                <span className="jt-cell-more">+{value.length - 1}</span>
+                              </span>
+                            ) : (
+                              display
+                            );
+                          let content: React.ReactNode = summary;
+                          // A single-select advertises itself before it is
+                          // touched: the reader should know the cell opens a
+                          // list without having to try it first.
+                          if (
+                            !isEditing &&
+                            (editorConfig?.type === "single-select" ||
+                              editorConfig?.type === "multi-select") &&
+                            canEditCell(cell)
+                          ) {
+                            content = (
+                              <>
+                                <span className="jt-cell-value">{summary}</span>
+                                <ChevronIcon
+                                  className="jt-cell-chevron"
+                                  direction="down"
+                                  height={14}
+                                  width={14}
+                                />
+                              </>
+                            );
+                          }
+                          if (isEditing && editorConfig) {
+                            content = (
+                              <CellEditor
+                                config={editorConfig}
+                                label={getColumnLabel(cell.column)}
+                                layer={editorLayer}
+                                meta={meta}
+                                onCancel={() => {
+                                  editing.cancel();
+                                  navigation.requestFocus();
+                                }}
+                                onCommit={(next, move) => handleCellCommit(cell, next, move)}
+                                onValidationChange={editing.setInvalid}
+                                options={resolveEditorOptions(meta)}
+                                seed={editing.editor?.seed}
+                                value={pending?.status === "error" ? pending.value : value}
+                                viewport={scrollReference.current}
+                              />
+                            );
+                          } else if (editorConfig?.type === "boolean") {
+                            // The cell is the tab stop; the control keeps
+                            // announcing its state without adding a second
+                            // stop to every row.
+                            const booleanProps = {
+                              "aria-label": getColumnLabel(cell.column),
+                              checked: value === true,
+                              disabled: !canEditCell(cell) || status === "saving",
+                              onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+                                editing.commit(cell, event.currentTarget.checked),
+                              tabIndex: -1,
+                            };
+                            content =
+                              editorConfig.control === "checkbox" ? (
+                                <IndeterminateCheckbox {...booleanProps} />
+                              ) : (
+                                <Switch {...booleanProps} />
+                              );
+                          }
                           return (
+                            // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is Enter/F2/type-to-edit on the focused cell, handled once on the viewport rather than once per cell
                             <div
                               className={cx("jt-grid__cell", classNames.cell, meta?.cellClassName)}
                               data-align={meta?.cellAlign ?? meta?.headerAlign ?? "left"}
+                              data-cell-id={editingEnabled ? cell.id : undefined}
+                              data-edit-status={pending?.status}
+                              data-status={status}
+                              aria-busy={status === "saving" || undefined}
+                              data-editable={(editingEnabled && canEditCell(cell)) || undefined}
+                              data-editor-type={editorConfig?.type}
+                              data-editing={isEditing || undefined}
+                              data-focused={(editingEnabled && cell.getIsFocused()) || undefined}
                               key={cell.id}
+                              onClick={
+                                editingEnabled
+                                  ? (event) => handleCellClick(cell, isEditing, event)
+                                  : undefined
+                              }
+                              onMouseDown={
+                                editingEnabled
+                                  ? (event) => {
+                                      if (!isEditing && !editing.invalid.current)
+                                        cell.getSelectionStartHandler()(event);
+                                    }
+                                  : undefined
+                              }
                               role="gridcell"
-                              title={typeof content === "string" ? content : undefined}
+                              tabIndex={editingEnabled ? cell.getTabIndex() : undefined}
+                              title={
+                                pending?.message ??
+                                (typeof display === "string" ? display : undefined)
+                              }
                             >
                               {content}
                             </div>
@@ -996,9 +1413,66 @@ export function DataGrid<TData extends RowData>(props: DataGridProps<TData>) {
             </div>
           </div>
         </div>
+        {editingEnabled ? (
+          <div aria-hidden={false} className="jt-grid__editor-layer" ref={setEditorLayer} />
+        ) : null}
         {scrollbar === "overlay" ? <OverlayScrollbars viewportRef={scrollReference} /> : null}
       </div>
 
+      {editingEnabled ? (
+        <div className="jt-grid__editing-status">
+          <div className="jt-grid__editing-status-line">
+            <span aria-live="polite" role="status">
+              {savingCount
+                ? `Saving ${savingCount} ${savingCount === 1 ? "change" : "changes"}…`
+                : errors.length
+                  ? `${errors.length} ${errors.length === 1 ? "change" : "changes"} could not be saved`
+                  : editing.undoEdit
+                    ? "Changes saved"
+                    : null}
+            </span>
+            <button
+              className="jt-editor-button"
+              disabled={!canUndo}
+              onClick={undoLastEdit}
+              type="button"
+              title="Undo last edit (Ctrl+Z / ⌘Z)"
+            >
+              Undo last edit
+            </button>
+          </div>
+          {errors.map(([cellId, edit]) => {
+            const cell = findEditableCell(edit.rowId, edit.columnId);
+            const index = navigation.displayIndexByRowId.get(edit.rowId);
+            return (
+              <div className="jt-grid__save-error" key={cellId}>
+                <span role="alert">
+                  {index !== undefined ? `Row ${index + 1} · ` : ""}
+                  {cell ? getColumnLabel(cell.column) : "Field"}:{" "}
+                  {edit.message ?? "Couldn't save this change."}
+                </span>
+                <button
+                  className="jt-editor-button"
+                  disabled={!cell || !canEditCell(cell)}
+                  onClick={() => {
+                    if (cell) editing.commit(cell, edit.value, edit.isUndo);
+                  }}
+                  type="button"
+                >
+                  Retry
+                </button>
+                <button
+                  className="jt-editor-button"
+                  onClick={() => editing.discard(cellId)}
+                  type="button"
+                >
+                  Discard
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
       {showFooter ? (
         <div className={cx("jt-grid__footer", classNames.footer)} data-slot="footer">
           <div className={cx("jt-grid__footer-start", classNames.footerStart)}>

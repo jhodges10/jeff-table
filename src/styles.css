@@ -217,6 +217,14 @@
     overflow: auto;
     outline: none;
   }
+  .jt-grid[data-scrollbar="overlay"]:has(.jt-grid__editing-status) .jt-grid__viewport,
+  .jt-grid[data-scrollbar="overlay"]:has(.jt-grid__editing-status)
+    .jt-grid__column-header-viewport {
+    margin-right: 16px;
+  }
+  .jt-grid[data-scrollbar="overlay"]:has(.jt-grid__editing-status) .jt-grid__viewport {
+    margin-bottom: 16px;
+  }
   .jt-grid[data-scrollbar="overlay"] .jt-grid__viewport {
     scrollbar-width: none;
   }
@@ -269,7 +277,17 @@
     position: absolute;
     z-index: 6;
     inset: 0;
+    opacity: 0;
     pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+  .jt-grid__overlay-scrollbars[data-active="true"] {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jt-grid__overlay-scrollbars {
+      transition: none;
+    }
   }
   .jt-grid__overlay-scrollbar {
     position: absolute;
@@ -285,9 +303,12 @@
     position: absolute;
     border-radius: 999px;
     background: var(--jt-scrollbar-thumb);
-    pointer-events: auto;
+    pointer-events: none;
     touch-action: none;
     user-select: none;
+  }
+  .jt-grid__overlay-scrollbars[data-active="true"] .jt-grid__overlay-scrollbar-thumb {
+    pointer-events: auto;
   }
   .jt-grid__overlay-scrollbar--vertical .jt-grid__overlay-scrollbar-thumb {
     inset-inline: 2.5px;
@@ -1193,6 +1214,508 @@
     justify-content: center;
     padding: 0.5rem;
   }
+
+  .jt-editor-feedback {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    white-space: normal;
+    text-align: left;
+  }
+  .jt-editor-feedback p {
+    flex: 1;
+    margin: 0;
+    color: var(--jt-muted-foreground);
+    font-size: 0.75rem;
+  }
+  .jt-editor-feedback p[data-error="true"] {
+    color: var(--jt-danger);
+  }
+  .jt-editor-button {
+    flex: none;
+    border: 1px solid var(--jt-border);
+    border-radius: var(--jt-control-radius);
+    padding: 0.3rem 0.6rem;
+    background: var(--jt-background);
+    color: var(--jt-foreground);
+    cursor: pointer;
+    font: inherit;
+  }
+  .jt-editor-button:hover:not(:disabled) {
+    background: var(--jt-muted);
+  }
+  .jt-editor-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .jt-editor-button:focus-visible {
+    outline: 2px solid var(--jt-focus-ring);
+    outline-offset: 2px;
+  }
+  .jt-editor-button--primary {
+    background: var(--jt-accent);
+    color: var(--jt-accent-foreground);
+  }
+  .jt-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem;
+  }
+  .jt-editor-actions .jt-editor-feedback {
+    flex: 1;
+    min-width: 0;
+  }
+  .jt-editor-search {
+    position: sticky;
+    top: -0.25rem;
+    z-index: 1;
+    padding: 0.5rem;
+    background: var(--jt-overlay-background);
+  }
+  .jt-editor-search input {
+    width: 100%;
+    min-height: 2rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--jt-border);
+    border-radius: var(--jt-control-radius);
+  }
+  .jt-editor-search input:focus {
+    outline: 2px solid var(--jt-focus-ring);
+    outline-offset: -2px;
+  }
+  .jt-cell-more {
+    flex: none;
+    color: var(--jt-muted-foreground);
+    font-size: 0.75rem;
+  }
+  .jt-cell-summary {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .jt-cell-placeholder {
+    color: var(--jt-muted-foreground);
+  }
+
+  .jt-grid__editing-status {
+    border-top: 1px solid var(--jt-border);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  .jt-grid__editing-status-line,
+  .jt-grid__save-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .jt-grid__editing-status-line > span,
+  .jt-grid__save-error > span {
+    flex: 1;
+  }
+  .jt-grid__editing-status-line {
+    color: var(--jt-muted-foreground);
+  }
+  .jt-grid__save-error {
+    margin-top: 0.5rem;
+    color: var(--jt-danger);
+  }
+  .jt-cell-input[aria-invalid="true"],
+  .jt-cell-combobox:has([aria-invalid="true"]) {
+    outline-color: var(--jt-danger);
+  }
+  .jt-date-panel .rdp-dropdowns {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .jt-date-panel .rdp-dropdown_root {
+    position: relative;
+  }
+  .jt-date-panel .rdp-dropdown {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .jt-date-panel .rdp-dropdown_root:focus-within {
+    outline: 2px solid var(--jt-focus-ring);
+    border-radius: 0.25rem;
+  }
+  /* Inline editing
+     ------------------------------------------------------------------ */
+
+  .jt-grid__cell[data-editable="true"] {
+    cursor: text;
+  }
+  /* An inset ring rather than a border: a border would move the text. */
+  .jt-grid__cell[data-focused="true"] {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--jt-focus-ring);
+    outline-offset: -2px;
+  }
+  .jt-grid__cell[data-editing="true"] {
+    z-index: 2;
+    padding: 0;
+    overflow: visible;
+    background: var(--jt-background);
+  }
+  @keyframes jt-row-saving {
+    0%,
+    100% {
+      opacity: 0.65;
+    }
+    50% {
+      opacity: 0.4;
+    }
+  }
+  .jt-grid__row[data-status="saving"] {
+    opacity: 0.65;
+    animation: jt-row-saving 1.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jt-grid__row[data-status="saving"] {
+      animation: none;
+    }
+  }
+  .jt-grid__cell[data-status="error"] {
+    outline: 2px solid var(--jt-danger);
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--jt-danger) 10%, transparent);
+  }
+
+  /*
+   * A cell that opens a list says so. The value takes the room that is left so
+   * it still truncates, and the chevron never moves.
+   */
+  .jt-cell-values {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.25rem;
+    overflow: hidden;
+  }
+  .jt-cell-value {
+    min-width: 0;
+    flex: 1;
+    /* Room for the chevron, which is out of the flow and cannot make its own. */
+    padding-inline-end: 1.125rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /*
+   * The chevron is chrome, not content. In the flow it is a flex item that a
+   * value too wide for its column can shove along in front of it — which is
+   * what happened on opening the combobox, where the held value does not
+   * truncate the way the cell's text does. Out of the flow it is anchored to
+   * the *cell*, the one box that is the same in both states, so it cannot move
+   * no matter what shares the row with it.
+   */
+  .jt-grid__cell[data-editable="true"] {
+    position: relative;
+  }
+  .jt-cell-chevron {
+    position: absolute;
+    top: 50%;
+    inset-inline-end: var(--jt-cell-padding-inline);
+    flex: none;
+    color: var(--jt-muted-foreground);
+    translate: 0 -50%;
+    pointer-events: none;
+  }
+  .jt-grid__cell:hover .jt-cell-chevron,
+  .jt-grid__cell[data-focused="true"] .jt-cell-chevron {
+    color: var(--jt-foreground);
+  }
+
+  .jt-cell-editor {
+    display: contents;
+  }
+  .jt-cell-input {
+    width: 100%;
+    height: 100%;
+    padding: var(--jt-cell-padding-block) var(--jt-cell-padding-inline);
+    /* A field does not inherit the cell's alignment on its own, so a
+       right-aligned number would jump to the left just for being edited. */
+    text-align: inherit;
+    border: none;
+    border-radius: 0;
+    color: inherit;
+    background: transparent;
+    outline: 2px solid var(--jt-accent);
+    outline-offset: -2px;
+  }
+
+  .jt-cell-combobox {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    padding-inline: var(--jt-cell-padding-inline);
+    overflow: hidden;
+    background: var(--jt-background);
+    outline: 2px solid var(--jt-accent);
+    outline-offset: -2px;
+  }
+  /* Only a select that shows a chevron reserves room for one. */
+  .jt-cell-combobox[data-chevron="true"] {
+    padding-inline-end: calc(var(--jt-cell-padding-inline) + 1.125rem);
+  }
+  .jt-cell-combobox__value {
+    display: inline-flex;
+    /* It yields nothing while there is room, and truncates rather than
+       overflowing once there is not — the same bargain the cell's own value
+       makes, so a narrow column reads the same open as closed. */
+    min-width: 0;
+    flex: 0 1 auto;
+    align-items: center;
+    overflow: hidden;
+  }
+  .jt-cell-combobox .jt-cell-chevron {
+    color: var(--jt-accent);
+  }
+  .jt-cell-combobox__input {
+    /* Narrow enough to yield to the value beside it — the moment anything is
+       typed the value gives way and the field has the whole cell. */
+    min-width: 1.25rem;
+    flex: 1;
+    border: none;
+    color: inherit;
+    background: transparent;
+    outline: none;
+  }
+
+  .jt-chip {
+    display: inline-flex;
+    max-width: 10rem;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.0625rem 0.25rem 0.0625rem 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--jt-foreground);
+    background: var(--jt-muted);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    white-space: nowrap;
+    transition: border-color 120ms ease;
+  }
+  /*
+   * A column that draws its own values has already drawn the pill, so the chip
+   * must not fill a second one behind it — the reader would get the column's
+   * design twice, nested. It still has to read as one chip, though: a bare
+   * cross floating beside the pill reads as two separate things. A hairline
+   * capsule with no fill binds the value and its cross into a single control
+   * while leaving the column's own design the only coloured shape.
+   */
+  .jt-chip[data-drawn] {
+    max-width: none;
+    gap: 0.0625rem;
+    padding: 1px 0.1875rem 1px 1px;
+    border: 1px solid var(--jt-border);
+    background: none;
+    font-size: inherit;
+  }
+  .jt-chip[data-drawn]:hover {
+    border-color: color-mix(in srgb, var(--jt-muted-foreground) 45%, var(--jt-border));
+  }
+  /*
+   * A button carries the browser's own border, padding and background until it
+   * is told otherwise — inside a 0.875rem box that leaves the icon no content
+   * width at all, which is how this drew as an empty ring. Reset first, then
+   * style.
+   */
+  .jt-chip__remove {
+    display: inline-flex;
+    width: 1rem;
+    height: 1rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    color: var(--jt-muted-foreground);
+    background: transparent;
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      background-color 120ms ease,
+      transform 120ms ease;
+  }
+  .jt-chip__remove > svg {
+    transition: transform 160ms cubic-bezier(0.34, 1.3, 0.64, 1);
+  }
+  .jt-chip__remove:hover,
+  .jt-chip__remove:focus-visible {
+    color: var(--jt-foreground);
+    background: color-mix(in srgb, var(--jt-muted-foreground) 22%, transparent);
+  }
+  /* The cross turns a quarter turn into itself: the same glyph, visibly live. */
+  .jt-chip__remove:hover > svg,
+  .jt-chip__remove:focus-visible > svg {
+    transform: rotate(90deg);
+  }
+  .jt-chip__remove:active {
+    transform: scale(0.88);
+  }
+  .jt-chip__remove:focus-visible {
+    outline: 2px solid var(--jt-focus-ring);
+    outline-offset: 1px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jt-chip,
+    .jt-chip__remove,
+    .jt-chip__remove > svg {
+      transition: none;
+    }
+    .jt-chip__remove:hover > svg,
+    .jt-chip__remove:focus-visible > svg,
+    .jt-chip__remove:active {
+      transform: none;
+    }
+  }
+
+  /*
+   * The layer escapes the cell's `overflow: hidden` and the viewport's
+   * `overflow: auto` by sitting in the shell instead. It must not intercept
+   * pointers: the overlay scrollbar thumbs and the rows underneath still own
+   * every pixel the popover itself is not covering.
+   */
+  .jt-cell-combobox > .jt-chip {
+    min-width: 0;
+    max-width: calc(100% - 2rem);
+    flex: 0 1 auto;
+    overflow: hidden;
+  }
+  .jt-grid__editor-layer {
+    position: absolute;
+    z-index: 60;
+    inset: 0;
+    pointer-events: none;
+  }
+  .jt-grid__editor-popover {
+    position: absolute;
+    width: max-content;
+    /* `min-width` is written from the anchor cell so the list lines up with the
+       control it came from; this is only the floor for a very narrow column. */
+    min-width: 9rem;
+    max-width: min(22rem, calc(100vw - 2rem));
+    overflow: auto;
+    padding: 0.25rem;
+    border: 1px solid var(--jt-border);
+    border-radius: 0.5rem;
+    color: var(--jt-foreground);
+    background: var(--jt-overlay-background);
+    box-shadow: var(--jt-overlay-shadow);
+    font-size: 0.8125rem;
+    pointer-events: auto;
+  }
+
+  .jt-option-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .jt-option-list__option {
+    display: flex;
+    min-height: 2rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--jt-control-radius);
+    cursor: pointer;
+    text-align: left;
+  }
+  .jt-option-list__option[data-active="true"] {
+    background: var(--jt-muted);
+  }
+  .jt-option-list__check {
+    display: inline-flex;
+    color: var(--jt-accent);
+    visibility: hidden;
+  }
+  .jt-option-list__check[data-visible="true"] {
+    visibility: visible;
+  }
+  .jt-option-list__empty {
+    margin: 0;
+    padding: 0.5rem;
+    color: var(--jt-muted-foreground);
+  }
+
+  .jt-date-panel {
+    padding: 0.25rem;
+  }
+
+  .jt-switch {
+    position: relative;
+    display: inline-flex;
+    width: 1.75rem;
+    height: 1rem;
+    flex: none;
+    align-items: center;
+  }
+  .jt-switch__input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .jt-switch__visual {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    padding: 0.125rem;
+    border: 1px solid var(--jt-border);
+    border-radius: 999px;
+    background: var(--jt-muted);
+    transition: background-color 120ms ease-out;
+  }
+  .jt-switch__thumb {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 999px;
+    background: var(--jt-background);
+    box-shadow: 0 1px 2px var(--jt-shadow-color);
+    transition: transform 120ms ease-out;
+  }
+  .jt-switch[data-state="on"] .jt-switch__visual {
+    border-color: var(--jt-accent);
+    background: var(--jt-accent);
+  }
+  .jt-switch[data-state="on"] .jt-switch__thumb {
+    transform: translateX(0.75rem);
+    background: var(--jt-accent-foreground);
+  }
+  .jt-switch[data-disabled="true"] {
+    opacity: 0.5;
+  }
+  .jt-switch[data-disabled="true"] .jt-switch__input {
+    cursor: not-allowed;
+  }
+  .jt-switch__input:focus-visible + .jt-switch__visual {
+    box-shadow:
+      0 0 0 2px var(--jt-background),
+      0 0 0 4px color-mix(in srgb, var(--jt-focus-ring) 80%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .jt-switch__visual,
+    .jt-switch__thumb {
+      transition: none;
+    }
+  }
+
   .jt-grid__selection-cell[data-selection-target="true"] {
     cursor: pointer;
   }

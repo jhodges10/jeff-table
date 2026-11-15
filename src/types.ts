@@ -1,4 +1,5 @@
 import type {
+  CellSelectionState,
   ColumnFiltersState,
   ColumnOrderState,
   ColumnSizingState,
@@ -10,6 +11,9 @@ import type {
 import type { CSSProperties, ReactNode } from "react";
 import type { DataGridColumnDef, DataGridInstance, DataGridRow } from "./features";
 
+/** Persistence state of an individual cell. */
+export type DataGridCellStatus = "idle" | "saving" | "error";
+
 export type DataGridAlignment = "left" | "center" | "right";
 export type DataGridDensity = "compact" | "comfortable" | "spacious";
 /**
@@ -20,20 +24,78 @@ export type DataGridDensity = "compact" | "comfortable" | "spacious";
  */
 export type DataGridScrollbar = "native" | "overlay";
 
-export interface DataGridFilterOption {
+/** A single known value a column can be filtered by or edited to. */
+export interface DataGridOption {
   label: string;
   value: string;
 }
+
+/** @deprecated Use {@link DataGridOption}; filters and editors share one option shape. */
+export type DataGridFilterOption = DataGridOption;
 
 export interface DataGridColumnFilterConfig {
   format?: "currency" | "number";
   max?: number;
   min?: number;
-  options?: readonly DataGridFilterOption[];
+  options?: readonly DataGridOption[];
   placeholder?: string;
-  renderOption?: (option: DataGridFilterOption) => ReactNode;
+  /** Overrides `meta.renderValue` for this filter's option list only. */
+  renderOption?: (option: DataGridOption) => ReactNode;
   step?: number;
   type: "boolean" | "date-range" | "multi-select" | "number-range" | "single-select" | "text";
+}
+
+/**
+ * How a column's cells are edited in place. The `type` picks the control, the
+ * same way `filter.type` picks the filter UI.
+ *
+ * `single-select` and `multi-select` need known options. They fall back to
+ * `filter.options` when this config omits its own, so a column that already
+ * declares a select filter becomes editable without repeating the list.
+ */
+export interface DataGridColumnEditorConfig {
+  /** Lets a typed value that matches no option be committed as-is. */
+  allowCustomValue?: boolean;
+  /**
+   * Which control a `boolean` column draws. Defaults to `"switch"`.
+   *
+   * A switch reads as a setting that takes effect at once; a checkbox reads as
+   * a value in a record. Both commit on click and on Space, and both are the
+   * whole editor — a boolean has nothing to draft.
+   */
+  control?: "checkbox" | "switch";
+  /** Set `false` to render the editor's display form without allowing edits. */
+  editable?: boolean;
+  max?: number;
+  min?: number;
+  /** Defaults to `filter.options` when omitted. */
+  options?: readonly DataGridOption[];
+  placeholder?: string;
+  /** Overrides `meta.renderValue` for this editor's option list only. */
+  renderOption?: (option: DataGridOption) => ReactNode;
+  /** Rejects an empty commit and keeps the editor open. */
+  required?: boolean;
+  step?: number;
+  type: "boolean" | "date" | "multi-select" | "number" | "single-select" | "text";
+  /** Return a message to reject the value; return nothing to accept it. */
+  validate?: (value: unknown) => string | undefined;
+}
+
+/**
+ * How a numeric column is written, in the cell and in its editor.
+ *
+ * The grid owns both the formatting and the parsing so the two cannot drift: a
+ * cell that reads `$40,845.00` opens an editor that reads `$40,845.00`, not a
+ * bare `40845` in whatever the browser felt like.
+ */
+export interface DataGridNumberFormat {
+  /** An ISO code, e.g. `USD`. Setting it implies the `currency` style. */
+  currency?: string;
+  /** Defaults to the host locale. */
+  locale?: string;
+  maximumFractionDigits?: number;
+  minimumFractionDigits?: number;
+  style?: "currency" | "decimal" | "percent";
 }
 
 export interface DataGridSkeletonConfig {
@@ -46,14 +108,29 @@ export interface DataGridSkeletonConfig {
 export interface DataGridColumnMeta {
   cellAlign?: DataGridAlignment;
   cellClassName?: string;
+  editor?: DataGridColumnEditorConfig;
   filter?: DataGridColumnFilterConfig;
   headerAlign?: DataGridAlignment;
   headerClassName?: string;
   headerTooltip?: ReactNode;
   maxWidth?: number;
   minWidth?: number;
+  numberFormat?: DataGridNumberFormat;
   numericSort?: boolean;
   prefix?: string;
+  /**
+   * How one of this column's values is drawn, wherever it appears.
+   *
+   * A status badge is a property of the value, not of the body cell, so
+   * declaring it once here paints it in the cell, in the filter's option list,
+   * in the editor's option list, and on a multi-select chip. Without it those
+   * surfaces fall back to the option label and the cell falls back to text, and
+   * the same value reads three different ways.
+   *
+   * A `cell` renderer still wins in the body, where it has the whole row to
+   * work with; this covers everywhere that only has the value.
+   */
+  renderValue?: (value: string) => ReactNode;
   reorderable?: boolean;
   resizable?: boolean;
   skeleton?: false | DataGridSkeletonConfig;
@@ -161,6 +238,7 @@ export type DataGridClassNameSlot =
   | "body"
   | "row"
   | "cell"
+  | "cellEditor"
   | "sectionHeader"
   | "skeleton"
   | "empty"
@@ -234,6 +312,12 @@ export interface DataGridBaseProps<TData extends RowData> {
   enableGlobalFilter?: boolean;
   error?: unknown;
   globalFilter?: string;
+  /** External cell persistence state. In-flight edits and failures take precedence. */
+  getCellStatus?: (context: {
+    columnId: string;
+    row: TData;
+    rowId: string;
+  }) => DataGridCellStatus | undefined;
   hasMore?: boolean;
   height?: number | string;
   initialPreferences?: Partial<DataGridPreferences>;
@@ -285,5 +369,56 @@ export type DataGridSelectionProps<TData extends RowData> =
       rowSelection?: never;
     };
 
+/**
+ * How an optimistic value is written back onto a row.
+ *
+ * The default writes the value at the column ID, which is correct for every
+ * `accessorKey` column, dotted paths included. A column with a custom
+ * `accessorFn` has no matching property, so those columns need this.
+ */
+export type DataGridApplyCellEdit<TData extends RowData> = (
+  row: TData,
+  columnId: string,
+  value: unknown,
+) => TData;
+
+/** One committed cell change, reported to `onCellEdit`. */
+export interface DataGridCellEdit<TData extends RowData> {
+  columnId: string;
+  previousValue: unknown;
+  /** The row as it was before the edit. */
+  row: TData;
+  rowId: string;
+  value: unknown;
+}
+
+/**
+ * Inline editing is a discriminated contract, like selection. Turning it on
+ * makes `getRowId` mandatory — the optimistic overlay and the focused-cell
+ * coordinate are both addressed by row ID, so an index-based identity would
+ * drift the moment a server sort or an appended page rearranged the rows.
+ */
+export type DataGridEditingProps<TData extends RowData> =
+  | {
+      applyCellEdit?: DataGridApplyCellEdit<TData>;
+      cellSelection?: CellSelectionState;
+      defaultCellSelection?: CellSelectionState;
+      enableInlineEditing: true;
+      getRowId: (row: TData, index: number) => string;
+      isCellEditable?: (context: { columnId: string; row: TData }) => boolean;
+      onCellEdit: (edit: DataGridCellEdit<TData>) => void | Promise<void>;
+      onCellSelectionChange?: (selection: CellSelectionState) => void;
+    }
+  | {
+      applyCellEdit?: never;
+      cellSelection?: never;
+      defaultCellSelection?: never;
+      enableInlineEditing?: false;
+      isCellEditable?: never;
+      onCellEdit?: never;
+      onCellSelectionChange?: never;
+    };
+
 export type DataGridProps<TData extends RowData> = DataGridBaseProps<TData> &
-  DataGridSelectionProps<TData>;
+  DataGridSelectionProps<TData> &
+  DataGridEditingProps<TData>;

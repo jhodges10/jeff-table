@@ -2,6 +2,8 @@ import "./styles.css";
 
 export { DataGrid } from "./data-grid";
 export {
+  DatePickerPanel,
+  type DatePickerPanelProps,
   DateRangePicker,
   DateRangePickerPanel,
   type DateRangePickerPanelProps,
@@ -9,6 +11,7 @@ export {
   type DateRangeValue,
 } from "./date-range-picker";
 export {
+  type DataGridCell,
   type DataGridColumn,
   type DataGridColumnDef,
   type DataGridFeatures,
@@ -26,6 +29,7 @@ export {
   createLocalStoragePreferenceStorage,
   parseDataGridPreferences,
 } from "./preferences";
+export { Switch, type SwitchProps } from "./switch";
 export {
   createThemeStyle,
   type DataGridThemeTokenName,
@@ -33,14 +37,21 @@ export {
 } from "./theme";
 export type {
   DataGridAlignment,
+  DataGridApplyCellEdit,
   DataGridBaseProps,
+  DataGridCellEdit,
+  DataGridCellStatus,
   DataGridClassNameSlot,
   DataGridClassNames,
   DataGridColorScheme,
+  DataGridColumnEditorConfig,
   DataGridColumnFilterConfig,
   DataGridColumnMeta,
   DataGridDensity,
+  DataGridEditingProps,
   DataGridFilterOption,
+  DataGridNumberFormat,
+  DataGridOption,
   DataGridPreferenceStorage,
   DataGridPreferences,
   DataGridProps,

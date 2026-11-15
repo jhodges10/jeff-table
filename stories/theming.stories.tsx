@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import { DataGrid, type DataGridProps } from "../src";
 import { defined } from "../src/test/defined";
 import { type Person, people, personColumns } from "./fixtures";
@@ -119,6 +119,31 @@ export const DensityVariants: Story = {
 };
 
 export const ScrollbarVariants: Story = {
+  play: async ({ canvasElement }) => {
+    const shell = defined(canvasElement.querySelector<HTMLElement>(".jt-grid__viewport-shell"));
+    const layer = defined(shell.querySelector<HTMLElement>(".jt-grid__overlay-scrollbars"));
+    const viewport = defined(shell.querySelector<HTMLElement>(".jt-grid__viewport"));
+    const thumb = defined(layer.querySelector<HTMLElement>(".jt-grid__overlay-scrollbar-thumb"));
+    await userEvent.hover(viewport);
+    await waitFor(() => expect(getComputedStyle(layer).opacity).toBe("1"));
+    await expect(getComputedStyle(thumb).pointerEvents).toBe("auto");
+    await userEvent.unhover(viewport);
+    await waitFor(() => expect(getComputedStyle(layer).opacity).toBe("0"), { timeout: 2500 });
+    await expect(getComputedStyle(thumb).pointerEvents).toBe("none");
+    const track = defined(
+      layer.querySelector<HTMLElement>(".jt-grid__overlay-scrollbar--vertical"),
+    );
+    const rect = track.getBoundingClientRect();
+    await userEvent.pointer({
+      target: viewport,
+      coords: { clientX: rect.left - 24, clientY: rect.top + 60 },
+    });
+    await waitFor(() => expect(getComputedStyle(layer).opacity).toBe("1"));
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    await expect(getComputedStyle(layer).opacity).toBe("1");
+    await userEvent.unhover(viewport);
+    await waitFor(() => expect(getComputedStyle(layer).opacity).toBe("0"), { timeout: 2500 });
+  },
   render: (args) => (
     <div className="story-density-stack">
       {(["overlay", "native"] as const).map((scrollbar) => (

@@ -50,7 +50,16 @@ const preview: Preview = {
       storySort: {
         order: [
           "DataGrid",
-          ["Overview", "Features", "Components", "States", "Theming", "Dark Mode", "Performance"],
+          [
+            "Overview",
+            "Features",
+            "Editing",
+            "Components",
+            "States",
+            "Theming",
+            "Dark Mode",
+            "Performance",
+          ],
         ],
       },
     },
